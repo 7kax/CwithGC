@@ -1,0 +1,69 @@
+#include "gc.h"
+
+#include <assert.h>
+#include <stdio.h>
+
+struct node {
+    int data;
+    struct node *next;
+};
+
+const long long ptr_map[1] = {
+    0x4000000000000000,
+};
+
+struct node *make_node(int data) {
+    struct node *new_node;
+    gc_local_var(&new_node);
+
+    gc_ptr_copy(&new_node, gc_malloc(sizeof(struct node)));
+    gc_register(new_node, (void *)ptr_map);
+
+    new_node->data = data;
+
+    gc_pop();
+
+    return new_node;
+}
+
+int main() {
+    int elements[] = {1, 2, 3, 4, 5};
+    int n = 5;
+
+    gc_init();
+
+    struct node *head, *cur, *new_node;
+    gc_local_var(&head);
+    gc_local_var(&cur);
+    gc_local_var(&new_node);
+
+    gc_ptr_copy(&head, make_node(elements[0]));
+    gc_ptr_copy(&cur, head);
+
+    for (int i = 1; i < n; i++) {
+        gc_ptr_copy(&new_node, make_node(elements[i]));
+        gc_ptr_copy(&(cur->next), new_node);
+        gc_ptr_copy(&cur, new_node);
+    }
+
+    gc_ptr_copy(&cur, NULL);
+    gc_ptr_copy(&new_node, NULL);
+
+    for (int i = 0; i < n; i++) {
+        assert(head->data == elements[i]);
+        gc_ptr_copy((void **)&head, head->next);
+    }
+
+    assert(head == NULL);
+    assert(cur == NULL);
+    assert(new_node == NULL);
+
+    gc_collect();
+    assert(gc_block_collected() == n);
+
+    gc_pop();
+    gc_cleanup();
+    puts("Mark-sweep linked list test passed!");
+
+    return 0;
+}
