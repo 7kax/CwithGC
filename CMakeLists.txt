@@ -16,13 +16,11 @@ include_directories(include)
 # 创建库文件
 # 每种算法对应一个库
 add_library(gc_mark_sweep STATIC src/mark_sweep/mark_sweep.cpp)
+add_library(gc_copying STATIC src/copying/copying.cpp)
+add_library(gc_ref_count STATIC src/ref_count/ref_count.cpp)
 
 # 添加测试目录
 add_subdirectory(test)
 
-# 创建示例程序
-# file(GLOB_RECURSE EXAMPLE_SOURCES "src/main.c")
-# add_executable(${PROJECT_NAME} ${EXAMPLE_SOURCES})
-
-# 设置要链接的库
-# target_link_libraries(${PROJECT_NAME} gc_mark_sweep)
+# 添加验证目录
+add_subdirectory(verify)

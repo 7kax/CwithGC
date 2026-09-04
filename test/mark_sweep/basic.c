@@ -4,9 +4,9 @@
 #include <assert.h>
 #include <stdlib.h>
 
-int main() {    
+int main() {
     gc_init();
-    
+
     const size_t alloc_size = 1024;
     const size_t meta_size = gc_meta_size();
     const size_t heap_size = gc_heap_size();
@@ -33,7 +33,7 @@ int main() {
 
     gc_ptr_copy(&ptr, ptr2); // block A is unreachable
     gc_collect();
-    
+
     layout = gc_mem_layout();
     assert(layout[0].size == alloc_size + meta_size);
     assert(layout[0].is_free == 1); // block A is free

@@ -1,15 +1,29 @@
-# 定义测试源文件列表
-set(TEST_SOURCES
-    mark_sweep/basic.c
-    mark_sweep/func_call.c
-    mark_sweep/recursion.c
-    mark_sweep/linked_list.c
+# 添加测试目录
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# 测试名称列表
+set(TEST_NAMES
+    basic
+    func_call
+    recursion
+    linked_list
 )
 
-# 遍历源文件创建测试
-foreach(SOURCE ${TEST_SOURCES})
-    get_filename_component(TEST_NAME ${SOURCE} NAME_WE)
-    add_executable(${TEST_NAME} ${SOURCE})
-    target_link_libraries(${TEST_NAME} gc_mark_sweep)
-    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+# 垃圾回收算法列表
+set(GC_ALGORITHMS
+    mark_sweep
+    copying
+    ref_count
+)
+
+# 为每个算法创建测试
+foreach(GC_ALGORITHM ${GC_ALGORITHMS})
+    foreach(TEST_NAME ${TEST_NAMES})
+        set(TEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${GC_ALGORITHM}/${TEST_NAME}.c)
+        if(EXISTS ${TEST_FILE})
+            add_executable(${GC_ALGORITHM}_${TEST_NAME} ${GC_ALGORITHM}/${TEST_NAME}.c)
+            target_link_libraries(${GC_ALGORITHM}_${TEST_NAME} gc_${GC_ALGORITHM})
+            add_test(NAME ${GC_ALGORITHM}_${TEST_NAME} COMMAND ${GC_ALGORITHM}_${TEST_NAME})
+        endif()
+    endforeach()
 endforeach()

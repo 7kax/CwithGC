@@ -44,7 +44,7 @@ int main() {
     gc_local_var(&ptr);
     gc_ptr_copy(&ptr, gc_malloc(sizeof(struct foo)));
     gc_register(ptr, ptr_table);
-    assert(ptr->a == 0);
+    assert(ptr->a == 0); // 整个结构体都被初始化为0
     assert(ptr->b == NULL);
     assert(ptr->c == NULL);
     assert(ptr->d == NULL);
@@ -56,23 +56,42 @@ int main() {
     assert(gc_root_size() == 1);
     assert(gc_block_collected() == 0);
 
+    struct foo *pre_ptr = ptr;
+
     gc_ptr_copy(&ptr->b, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->c, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->d, gc_malloc(sizeof(int)));
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 1);
-    assert(gc_free_size() == gc_heap_size() - 3 * sizeof(int) - sizeof(struct foo) - 4 * meta_size);
 
+    ptr->a = 666;
+    *ptr->b = 42;
+    *ptr->c = 43;
+    *ptr->d = 44;
+
+    // 触发垃圾收集
+    gc_collect();
+    assert(gc_block_collected() == 4); // 1个结构体 + 3个整数
+
+    // 地址应该发生变化
+    assert(ptr != pre_ptr);
+
+    // 值应该保持不变
+    assert(ptr->a == 666);
+    assert(*ptr->b == 42);
+    assert(*ptr->c == 43);
+    assert(*ptr->d == 44);
+
+    // 将根对象设为NULL并收集
     gc_ptr_copy((void **)&ptr, NULL);
     gc_collect();
-    assert(gc_block_collected() == 4);
     assert(gc_free_size() == gc_heap_size());
 
     gc_pop();
 
     gc_cleanup();
 
-    puts("Mark-sweep recursion test passed!");
+    puts("Copying recursion test passed!");
 
     return 0;
 }

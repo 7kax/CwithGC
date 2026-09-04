@@ -19,9 +19,6 @@ void foo() {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
-    assert(gc_free_size() == heap_size - 6 * (alloc_size + meta_size));
-    assert(gc_block_collected() == 0);
-
     gc_pop();
 }
 
@@ -43,22 +40,29 @@ int main() {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block C
 
-    assert(gc_free_size() == heap_size - 3 * (alloc_size + meta_size));
-    assert(gc_block_collected() == 0);
+    // 记录初始地址以验证复制后的地址变化
+    void *pre_ptr = ptr;
+    void *pre_ptr2 = ptr2;
+    void *pre_ptr3 = ptr3;
 
     foo(); // block D, E, F allocated here
     assert(gc_root_size() == 3);
 
     gc_collect();
-    assert(gc_free_size() == heap_size - 3 * (alloc_size + meta_size));
-    assert(gc_block_collected() == 3);
+
+    // 复制垃圾收集器会改变对象地址
+    assert(ptr != pre_ptr);
+    assert(ptr2 != pre_ptr2);
+    assert(ptr3 != pre_ptr3);
+
+    assert(gc_block_collected() == 3); // 只剩下 A, B, C
 
     gc_pop();
     assert(gc_root_size() == 0);
 
     gc_cleanup();
 
-    puts("Mark-sweep function call test passed!");
+    puts("Copying function call test passed!");
 
     return 0;
 }

@@ -50,15 +50,28 @@ int main() {
     gc_ptr_copy(&head, make_node(elements[0]));
     gc_ptr_copy(&cur, head);
 
+    // 创建一个链表
     for (int i = 1; i < n; i++) {
         gc_ptr_copy(&new_node, make_node(elements[i]));
         gc_ptr_copy(&(cur->next), new_node);
         gc_ptr_copy(&cur, new_node);
     }
 
+    // 记录第一个节点地址
+    struct node *pre_head = head;
+
+    // 触发垃圾收集
+    gc_collect();
+    assert(gc_block_collected() == n);
+
+    // 地址应该发生变化
+    assert(head != pre_head);
+
+    // 清理辅助指针
     gc_ptr_copy(&cur, NULL);
     gc_ptr_copy(&new_node, NULL);
 
+    // 遍历链表检查值
     for (int i = 0; i < n; i++) {
         assert(head->data == elements[i]);
         gc_ptr_copy((void **)&head, head->next);
@@ -68,12 +81,13 @@ int main() {
     assert(cur == NULL);
     assert(new_node == NULL);
 
+    // 此时所有节点应该都被回收
     gc_collect();
-    assert(gc_block_collected() == n);
+    assert(gc_free_size() == gc_heap_size());
 
     gc_pop();
     gc_cleanup();
-    puts("Mark-sweep linked list test passed!");
+    puts("Copying linked list test passed!");
 
     return 0;
 }
