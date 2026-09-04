@@ -10,19 +10,19 @@ extern "C" {
 
 // Pointer table for recursive collection of structs containing pointers.
 typedef struct {
-  // array_len == 1 means a single struct
-  // array_len > 1 means an array of structs
-  // otherwise illegal
-  size_t array_len;
+    // array_len == 1 means a single struct
+    // array_len > 1 means an array of structs
+    // otherwise illegal
+    size_t array_len;
 
-  // size of the struct
-  size_t struct_size;
+    // size of the struct
+    size_t struct_size;
 
-  // number of pointers in the struct
-  size_t num_pointers;
+    // number of pointers in the struct
+    size_t num_pointers;
 
-  // position of the pointer in the struct
-  size_t positions[0];
+    // position of the pointer in the struct
+    size_t positions[0];
 } gc_ptr_table;
 
 /**
@@ -95,9 +95,9 @@ size_t gc_meta_size();
 size_t gc_root_size();
 
 typedef struct {
-  void *start;
-  size_t size;
-  int is_free;
+    void *start;
+    size_t size;
+    int is_free;
 } mem_block_info;
 mem_block_info *gc_mem_layout();
 #endif

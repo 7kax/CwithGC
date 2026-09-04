@@ -52,7 +52,7 @@ int main() {
     // 测试引用共享
     int *ptr4;
     gc_local_var(&ptr4);
-    gc_ptr_copy(&ptr4, ptr2);  // ptr4和ptr2共享同一对象
+    gc_ptr_copy(&ptr4, ptr2); // ptr4和ptr2共享同一对象
 
     assert(*ptr4 == 43);
     assert(ptr2 == ptr4);
@@ -60,7 +60,7 @@ int main() {
     // 引用计数现在应该是2
     // 释放一个引用，对象不应被回收
     gc_ptr_copy(&ptr2, NULL);
-    assert(gc_block_collected() == 1);  // 仍然是1
+    assert(gc_block_collected() == 1); // 仍然是1
     assert(*ptr4 == 43);
 
     // 释放最后一个引用，对象应被回收

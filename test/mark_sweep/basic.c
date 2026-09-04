@@ -1,7 +1,7 @@
 #include "gc.h"
 
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 int main() {
@@ -18,7 +18,7 @@ int main() {
     assert(ptr == NULL);
     assert(ptr2 == NULL);
 
-    gc_ptr_copy(&ptr, gc_malloc(alloc_size)); // block A
+    gc_ptr_copy(&ptr, gc_malloc(alloc_size));  // block A
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
 
     mem_block_info *layout = gc_mem_layout();

@@ -9,23 +9,23 @@ void *heap_start;                  // Start of the heap
 const size_t heap_size = 4 * 1024; // 4KB
 
 struct stack_ptr {
-  void **ptr;  // Local pointer variable
-  void *frame; // Address of the frame containing the pointer
+    void **ptr;  // Local pointer variable
+    void *frame; // Address of the frame containing the pointer
 };
 std::vector<stack_ptr> root; // Stack of pointers as local variables
 
 struct free_block {
-  size_t size;      // Size of the free block
-  free_block *next; // Pointer to the next free block
+    size_t size;      // Size of the free block
+    free_block *next; // Pointer to the next free block
 };
 free_block *free_list; // List of free blocks
 size_t free_size;      // Total size of free blocks
 
 struct meta_data {
-  u_int8_t marked;         // Marked flag (1 byte)
-  gc_ptr_table *ptr_table; // Pointer table
-  size_t size;             // Size of the block
-  u_int8_t data[0];        // Data of the block
+    u_int8_t marked;         // Marked flag (1 byte)
+    gc_ptr_table *ptr_table; // Pointer table
+    size_t size;             // Size of the block
+    u_int8_t data[0];        // Data of the block
 };
 
 #ifdef GC_DEBUG
@@ -33,285 +33,296 @@ size_t block_collected = 0; // Number of blocks collected
 #endif
 
 static meta_data *get_meta_data(void *ptr) {
-  return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
+    return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
 }
 
 static void *pick_free_block(size_t size) {
-  assert(free_list != nullptr);
-  assert(size > 0);
+    assert(free_list != nullptr);
+    assert(size > 0);
 
-  free_block *prev = nullptr;
-  free_block *cur = free_list;
+    free_block *prev = nullptr;
+    free_block *cur = free_list;
 
-  while (cur != nullptr && cur->size < size) {
-    prev = cur;
-    cur = cur->next;
-  }
-
-  if (cur == nullptr) {
-    // If no free block is large enough, collect garbage
-    gc_collect();
-
-    // Try again
-    prev = nullptr;
-    cur = free_list;
     while (cur != nullptr && cur->size < size) {
-      prev = cur;
-      cur = cur->next;
+        prev = cur;
+        cur = cur->next;
     }
 
     if (cur == nullptr) {
-      return nullptr;
+        // If no free block is large enough, collect garbage
+        gc_collect();
+
+        // Try again
+        prev = nullptr;
+        cur = free_list;
+        while (cur != nullptr && cur->size < size) {
+            prev = cur;
+            cur = cur->next;
+        }
+
+        if (cur == nullptr) {
+            return nullptr;
+        }
     }
-  }
 
-  // Split the block if it is larger than the requested size
-  if (cur->size > size + sizeof(free_block)) {
-    free_block *new_block = (free_block *)((u_int64_t)cur + size);
-    new_block->size = cur->size - size;
-    new_block->next = cur->next;
+    // Split the block if it is larger than the requested size
+    if (cur->size > size + sizeof(free_block)) {
+        free_block *new_block = (free_block *)((u_int64_t)cur + size);
+        new_block->size = cur->size - size;
+        new_block->next = cur->next;
 
-    if (prev == nullptr) {
-      free_list = new_block;
+        if (prev == nullptr) {
+            free_list = new_block;
+        } else {
+            prev->next = new_block;
+        }
+
+        free_size -= size;
+        return cur;
     } else {
-      prev->next = new_block;
-    }
+        if (prev == nullptr) {
+            free_list = cur->next;
+        } else {
+            prev->next = cur->next;
+        }
 
-    free_size -= size;
-    return cur;
-  } else {
-    if (prev == nullptr) {
-      free_list = cur->next;
-    } else {
-      prev->next = cur->next;
+        free_size -= cur->size;
+        return cur;
     }
-
-    free_size -= cur->size;
-    return cur;
-  }
 }
 
 static void mark(void *ptr) {
-  meta_data *meta_ptr = get_meta_data(ptr);
+    meta_data *meta_ptr = get_meta_data(ptr);
 
-  if (meta_ptr->marked)
-    return;
+    if (meta_ptr->marked)
+        return;
 
-  // Mark the block
-  meta_ptr->marked = 1;
+    // Mark the block
+    meta_ptr->marked = 1;
 
-  if (meta_ptr->ptr_table == nullptr)
-    return;
+    if (meta_ptr->ptr_table == nullptr)
+        return;
 
-  // Recursively mark the children
-  u_int64_t cur_struct = (u_int64_t)ptr;
-  for (int i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-    for (int j = 0; j < meta_ptr->ptr_table->num_pointers; j++) {
-      void **child_ptr =
-          (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
-      if (*child_ptr != nullptr) {
-        mark(*child_ptr);
-      }
+    // Recursively mark the children
+    u_int64_t cur_struct = (u_int64_t)ptr;
+    for (int i = 0; i < meta_ptr->ptr_table->array_len; i++) {
+        for (int j = 0; j < meta_ptr->ptr_table->num_pointers; j++) {
+            void **child_ptr = (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
+            if (*child_ptr != nullptr) {
+                mark(*child_ptr);
+            }
+        }
+        cur_struct += meta_ptr->ptr_table->struct_size;
     }
-    cur_struct += meta_ptr->ptr_table->struct_size;
-  }
 }
 
 static void mark_phase() {
-  for (auto [ptr, _] : root) {
-    if (*ptr != nullptr)
-      mark(*ptr);
-  }
+    for (auto [ptr, _] : root) {
+        if (*ptr != nullptr)
+            mark(*ptr);
+    }
 }
 
 static void sweep_phase() {
-  u_int64_t heap_end = (u_int64_t)heap_start + heap_size;
+    u_int64_t heap_end = (u_int64_t)heap_start + heap_size;
 
-  u_int64_t sweeping = (u_int64_t)heap_start;
-  free_block *next_free_block = free_list;
-  free_block *prev_free_block = nullptr;
+    u_int64_t sweeping = (u_int64_t)heap_start;
+    free_block *next_free_block = free_list;
+    free_block *prev_free_block = nullptr;
 
-  while (sweeping < heap_end) {
-    if (sweeping == (u_int64_t)next_free_block) {
-      // Skip the free block
-      sweeping += next_free_block->size;
+    while (sweeping < heap_end) {
+        if (sweeping == (u_int64_t)next_free_block) {
+            // Skip the free block
+            sweeping += next_free_block->size;
 
-      prev_free_block = next_free_block;
-      next_free_block = next_free_block->next;
-    } else {
-      assert(sweeping < (u_int64_t)next_free_block);
-      meta_data *meta_ptr = (meta_data *)sweeping;
-
-      if (meta_ptr->marked == 0) {
-        // Unmarked block
-        // Add the block to the free list
-        free_block *new_free_block = (free_block *)sweeping;
-        new_free_block->size = meta_ptr->size;
-        new_free_block->next = next_free_block;
-
-        if (prev_free_block != nullptr) {
-          prev_free_block->next = new_free_block;
+            prev_free_block = next_free_block;
+            next_free_block = next_free_block->next;
         } else {
-          free_list = new_free_block;
-        }
-        prev_free_block = new_free_block;
+            assert(sweeping < (u_int64_t)next_free_block);
+            meta_data *meta_ptr = (meta_data *)sweeping;
 
-        free_size += meta_ptr->size;
+            if (meta_ptr->marked == 0) {
+                // Unmarked block
+                // Add the block to the free list
+                free_block *new_free_block = (free_block *)sweeping;
+                new_free_block->size = meta_ptr->size;
+                new_free_block->next = next_free_block;
+
+                if (prev_free_block != nullptr) {
+                    prev_free_block->next = new_free_block;
+                } else {
+                    free_list = new_free_block;
+                }
+                prev_free_block = new_free_block;
+
+                free_size += meta_ptr->size;
 
 #ifdef GC_DEBUG
-        block_collected++;
+                block_collected++;
 #endif
-      } else {
-        // Marked block
-        // Unmark the block
-        meta_ptr->marked = 0;
-      }
+            } else {
+                // Marked block
+                // Unmark the block
+                meta_ptr->marked = 0;
+            }
 
-      sweeping += meta_ptr->size;
+            sweeping += meta_ptr->size;
+        }
     }
-  }
 
-  // Merge adjacent free blocks
-  // TODO: optimize this, merge in the previous loop
-  for (free_block *cur = free_list; cur != nullptr; cur = cur->next) {
-    free_block *next = cur->next;
-    while (next != nullptr && (char *)cur + cur->size == (char *)next) {
-      cur->size += next->size;
-      cur->next = next = next->next;
+    // Merge adjacent free blocks
+    // TODO: optimize this, merge in the previous loop
+    for (free_block *cur = free_list; cur != nullptr; cur = cur->next) {
+        free_block *next = cur->next;
+        while (next != nullptr && (char *)cur + cur->size == (char *)next) {
+            cur->size += next->size;
+            cur->next = next = next->next;
+        }
     }
-  }
 }
 
 extern "C" {
 void gc_init() {
-  heap_start = std::malloc(heap_size);
-  assert(heap_start != nullptr);
+    heap_start = std::malloc(heap_size);
+    assert(heap_start != nullptr);
 
-  free_list = (free_block *)heap_start;
-  free_list->size = heap_size;
-  free_list->next = nullptr;
+    free_list = (free_block *)heap_start;
+    free_list->size = heap_size;
+    free_list->next = nullptr;
 
-  free_size = heap_size;
+    free_size = heap_size;
 
 #ifdef GC_DEBUG
-  block_collected = 0;
+    block_collected = 0;
 #endif
 }
 
 void *gc_malloc(size_t size) {
-  size_t alloc_size = size + sizeof(meta_data);
-  meta_data *block = (meta_data *)pick_free_block(alloc_size);
-  if (block == nullptr) {
-    gc_allocation_failure();
-  }
+    size_t alloc_size = size + sizeof(meta_data);
+    meta_data *block = (meta_data *)pick_free_block(alloc_size);
+    if (block == nullptr) {
+        gc_allocation_failure();
+    }
 
-  block->ptr_table = nullptr;
-  block->size = alloc_size;
-  block->marked = 0;
+    block->ptr_table = nullptr;
+    block->size = alloc_size;
+    block->marked = 0;
 
-  std::memset(block->data, 0, size);
+    std::memset(block->data, 0, size);
 
-  return &block->data;
+    return &block->data;
 }
 
 void gc_local_var(void **ptr) {
-  void *frame_address = __builtin_frame_address(1);
-  root.push_back({ptr, frame_address});
+    void *frame_address = __builtin_frame_address(1);
+    root.push_back({ptr, frame_address});
 
-  // Clear the pointer
-  *ptr = nullptr;
+    // Clear the pointer
+    *ptr = nullptr;
 }
 
 void gc_register(void *ptr, gc_ptr_table *ptr_map) {
-  meta_data *meta_ptr = get_meta_data(ptr);
+    meta_data *meta_ptr = get_meta_data(ptr);
 
-  // 只允许注册一次
-  assert(meta_ptr->ptr_table == nullptr);
+    // 只允许注册一次
+    assert(meta_ptr->ptr_table == nullptr);
 
-  // 保证 ptr_map 合法
-  assert(ptr_map != nullptr);
-  assert(ptr_map->array_len > 0);
-  assert(ptr_map->struct_size > 0);
-  assert(ptr_map->num_pointers > 0);
+    // 保证 ptr_map 合法
+    assert(ptr_map != nullptr);
+    assert(ptr_map->array_len > 0);
+    assert(ptr_map->struct_size > 0);
+    assert(ptr_map->num_pointers > 0);
 
-  meta_ptr->ptr_table = ptr_map;
+    meta_ptr->ptr_table = ptr_map;
 }
 
 void gc_allocation_failure() {
-  std::cerr << "Allocation failed\n";
-  std::abort();
+    std::cerr << "Allocation failed\n";
+    std::abort();
 }
 
 void gc_collect() {
-  mark_phase();
-  sweep_phase();
+    mark_phase();
+    sweep_phase();
 }
 
 void gc_cleanup() {
-  std::free(heap_start);
-  heap_start = nullptr;
-  free_list = nullptr;
-  free_size = 0;
-  root.clear();
+    std::free(heap_start);
+    heap_start = nullptr;
+    free_list = nullptr;
+    free_size = 0;
+    root.clear();
 }
 
 // No need to handle this in mark-sweep
-void gc_ptr_copy(void **dst, void *src) { *dst = src; }
+void gc_ptr_copy(void **dst, void *src) {
+    *dst = src;
+}
 
 void gc_pop() {
-  void *frame_address = root.back().frame;
-  while (!root.empty() && root.back().frame == frame_address) {
-    root.pop_back();
-  }
+    void *frame_address = root.back().frame;
+    while (!root.empty() && root.back().frame == frame_address) {
+        root.pop_back();
+    }
 }
 
 #ifdef GC_DEBUG
-size_t gc_heap_size() { return heap_size; }
-size_t gc_free_size() { return free_size; }
-size_t gc_block_collected() { return block_collected; }
-size_t gc_meta_size() { return sizeof(meta_data); }
-size_t gc_root_size() { return root.size(); }
+size_t gc_heap_size() {
+    return heap_size;
+}
+size_t gc_free_size() {
+    return free_size;
+}
+size_t gc_block_collected() {
+    return block_collected;
+}
+size_t gc_meta_size() {
+    return sizeof(meta_data);
+}
+size_t gc_root_size() {
+    return root.size();
+}
 
 mem_block_info *gc_mem_layout() {
-  std::vector<mem_block_info> mem_blocks;
+    std::vector<mem_block_info> mem_blocks;
 
-  void *heap_end = (char *)heap_start + heap_size;
+    void *heap_end = (char *)heap_start + heap_size;
 
-  void *scanning = heap_start;
-  free_block *prev_free_block = nullptr;
-  free_block *next_free_block = free_list;
+    void *scanning = heap_start;
+    free_block *prev_free_block = nullptr;
+    free_block *next_free_block = free_list;
 
-  while (scanning < heap_end) {
-    if (scanning == next_free_block) {
-      size_t size = next_free_block->size;
-      void *end = (char *)scanning + size;
+    while (scanning < heap_end) {
+        if (scanning == next_free_block) {
+            size_t size = next_free_block->size;
+            void *end = (char *)scanning + size;
 
-      // std::cout << "Start: " << scanning << ", End: " << end
-      //           << ", Size: " << size << ", Free\n";
-      mem_blocks.push_back({scanning, size, 1});
+            // std::cout << "Start: " << scanning << ", End: " << end
+            //           << ", Size: " << size << ", Free\n";
+            mem_blocks.push_back({scanning, size, 1});
 
-      scanning = end;
+            scanning = end;
 
-      prev_free_block = next_free_block;
-      next_free_block = next_free_block->next;
-    } else {
-      // size_t size = *(size_t *)((char *)scanning + 1);
-      size_t size = ((meta_data *)scanning)->size;
-      void *end = (char *)scanning + size;
+            prev_free_block = next_free_block;
+            next_free_block = next_free_block->next;
+        } else {
+            // size_t size = *(size_t *)((char *)scanning + 1);
+            size_t size = ((meta_data *)scanning)->size;
+            void *end = (char *)scanning + size;
 
-      // std::cout << "Start: " << scanning << ", End: " << end
-      //   << ", Size: " << size << ", Allocated\n";
-      mem_blocks.push_back({scanning, size, 0});
+            // std::cout << "Start: " << scanning << ", End: " << end
+            //   << ", Size: " << size << ", Allocated\n";
+            mem_blocks.push_back({scanning, size, 0});
 
-      scanning = end;
+            scanning = end;
+        }
     }
-  }
 
-  mem_block_info *mem_block_array = new mem_block_info[mem_blocks.size() + 1];
-  std::copy(mem_blocks.begin(), mem_blocks.end(), mem_block_array);
-  mem_block_array[mem_blocks.size()] = {nullptr, 0, 0};
+    mem_block_info *mem_block_array = new mem_block_info[mem_blocks.size() + 1];
+    std::copy(mem_blocks.begin(), mem_blocks.end(), mem_block_array);
+    mem_block_array[mem_blocks.size()] = {nullptr, 0, 0};
 
-  return mem_block_array;
+    return mem_block_array;
 }
 #endif
 }

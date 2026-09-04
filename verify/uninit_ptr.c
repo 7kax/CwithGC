@@ -1,8 +1,8 @@
 #include "gc.h"
 
 #include <assert.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 
 struct foo {
     int *a;

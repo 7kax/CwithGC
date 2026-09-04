@@ -10,9 +10,9 @@
  */
 
 #include <assert.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 
 // 不安全版本
 int _main() {

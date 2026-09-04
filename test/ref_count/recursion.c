@@ -81,11 +81,11 @@ int main() {
     gc_ptr_copy(&ptr->d, NULL);
 
     // 引用计数垃圾收集是即时的，所以当引用被清除时应该已经回收了
-    assert(gc_block_collected() == 3);  // 3个整数对象
+    assert(gc_block_collected() == 3); // 3个整数对象
 
     // 将根对象设为NULL并进行垃圾收集
     gc_ptr_copy(&ptr, NULL);
-    assert(gc_block_collected() == 4);  // 3个整数对象 + 1个结构体
+    assert(gc_block_collected() == 4); // 3个整数对象 + 1个结构体
 
     // 内存应该全部被回收
     assert(gc_free_size() == gc_heap_size());

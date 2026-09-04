@@ -15,7 +15,7 @@ void foo() {
     assert(ptr == NULL);
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
-    gc_ptr_copy(&ptr, gc_malloc(alloc_size)); // block D
+    gc_ptr_copy(&ptr, gc_malloc(alloc_size));  // block D
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
@@ -39,7 +39,7 @@ int main() {
     assert(ptr == NULL);
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
-    gc_ptr_copy(&ptr, gc_malloc(alloc_size)); // block A
+    gc_ptr_copy(&ptr, gc_malloc(alloc_size));  // block A
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block C
 

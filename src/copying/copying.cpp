@@ -31,7 +31,9 @@ struct meta_data {
 size_t block_collected = 0;
 #endif
 
-static meta_data *get_meta_data(void *ptr) { return (meta_data *)((u_int64_t)ptr - sizeof(meta_data)); }
+static meta_data *get_meta_data(void *ptr) {
+    return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
+}
 
 static void *evacuate(void *ptr) {
     meta_data *old_meta = get_meta_data(ptr);
@@ -143,7 +145,9 @@ void gc_register(void *ptr, gc_ptr_table *ptr_map) {
 }
 
 // No need to handle this in copying
-void gc_ptr_copy(void **dst, void *src) { *dst = src; }
+void gc_ptr_copy(void **dst, void *src) {
+    *dst = src;
+}
 
 void gc_collect() {
     free_space = to;
@@ -192,11 +196,21 @@ void gc_allocation_failure() {
 }
 
 #ifdef GC_DEBUG
-size_t gc_heap_size() { return heap_size; }
-size_t gc_free_size() { return free_size; }
-size_t gc_block_collected() { return block_collected; }
-size_t gc_meta_size() { return sizeof(meta_data); }
-size_t gc_root_size() { return root.size(); }
+size_t gc_heap_size() {
+    return heap_size;
+}
+size_t gc_free_size() {
+    return free_size;
+}
+size_t gc_block_collected() {
+    return block_collected;
+}
+size_t gc_meta_size() {
+    return sizeof(meta_data);
+}
+size_t gc_root_size() {
+    return root.size();
+}
 mem_block_info *gc_mem_layout() {
     std::vector<mem_block_info> mem_layout;
 
