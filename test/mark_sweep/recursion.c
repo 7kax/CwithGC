@@ -1,3 +1,4 @@
+#include "../test_layout.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -38,7 +39,8 @@ int main() {
 
     gc_init();
 
-    const size_t meta_size = gc_meta_size();
+    const size_t struct_block_size = test_gc_block_size(sizeof(struct foo));
+    const size_t int_block_size = test_gc_block_size(sizeof(int));
 
     struct foo *ptr;
     gc_local_var(&ptr);
@@ -52,7 +54,7 @@ int main() {
     assert(ptr->f == NULL);
     assert(ptr->g == NULL);
     assert(ptr->h == NULL);
-    assert(gc_free_size() == gc_heap_size() - sizeof(struct foo) - meta_size);
+    assert(gc_free_size() == gc_heap_size() - struct_block_size);
     assert(gc_root_size() == 1);
     assert(gc_block_collected() == 0);
 
@@ -61,7 +63,7 @@ int main() {
     gc_ptr_copy(&ptr->d, gc_malloc(sizeof(int)));
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 1);
-    assert(gc_free_size() == gc_heap_size() - 3 * sizeof(int) - sizeof(struct foo) - 4 * meta_size);
+    assert(gc_free_size() == gc_heap_size() - struct_block_size - 3 * int_block_size);
 
     gc_ptr_copy((void **)&ptr, NULL);
     gc_collect();

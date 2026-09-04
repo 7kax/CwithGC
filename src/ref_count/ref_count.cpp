@@ -1,3 +1,4 @@
+#include "../gc_layout.h"
 #include "gc.h"
 #include <cassert>
 #include <cstdlib>
@@ -21,7 +22,6 @@ struct meta_data {
     gc_ptr_table *ptr_table; // 指向指针表的指针
     size_t ref_count;        // 引用计数
     size_t size;             // 块大小
-    u_int8_t data[0];        // 数据块
 };
 
 #ifdef GC_DEBUG
@@ -29,7 +29,7 @@ size_t block_collected = 0; // 已回收的块数量
 #endif
 
 static meta_data *get_meta_data(void *ptr) {
-    return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
+    return gc_layout::metadata<meta_data>(ptr);
 }
 
 // 增加引用计数
@@ -65,13 +65,15 @@ static void decrement_ref_count(void *ptr) {
             }
         }
 
-        // 回收
-        std::free(meta_ptr);
-        free_size += meta_ptr->size;
+        // Read all required metadata before releasing the allocation.
+        const size_t released_size = meta_ptr->size;
+        free_size += released_size;
 
 #ifdef GC_DEBUG
         block_collected++;
 #endif
+
+        std::free(meta_ptr);
     }
 }
 
@@ -85,7 +87,9 @@ void gc_init() {
 }
 
 void *gc_malloc(size_t size) {
-    size_t alloc_size = size + sizeof(meta_data);
+    size_t alloc_size;
+    if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size)
+        gc_allocation_failure();
 
     if (alloc_size > free_size)
         gc_allocation_failure();
@@ -102,9 +106,10 @@ void *gc_malloc(size_t size) {
     meta_ptr->size = alloc_size;   // 设置块大小
 
     // 清空数据块
-    std::memset(meta_ptr->data, 0, size);
+    void *payload = gc_layout::payload(meta_ptr);
+    std::memset(payload, 0, size);
 
-    return &meta_ptr->data;
+    return payload;
 }
 
 void gc_local_var(void **ptr) {
@@ -188,7 +193,7 @@ size_t gc_block_collected() {
 }
 
 size_t gc_meta_size() {
-    return sizeof(meta_data);
+    return gc_layout::header_size<meta_data>;
 }
 
 size_t gc_root_size() {

@@ -1,3 +1,4 @@
+#include "../test_layout.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -5,7 +6,7 @@
 
 void foo() {
     const size_t alloc_size = 100;
-    const size_t meta_size = gc_meta_size();
+    const size_t block_size = test_gc_block_size(alloc_size);
     const size_t heap_size = gc_heap_size();
 
     void *ptr, *ptr2, *ptr3;
@@ -19,7 +20,7 @@ void foo() {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
-    assert(gc_free_size() == heap_size - 6 * (alloc_size + meta_size));
+    assert(gc_free_size() == heap_size - 6 * block_size);
     assert(gc_block_collected() == 0);
 
     gc_pop();
@@ -29,7 +30,7 @@ int main() {
     gc_init();
 
     const size_t alloc_size = 100;
-    const size_t meta_size = gc_meta_size();
+    const size_t block_size = test_gc_block_size(alloc_size);
     const size_t heap_size = gc_heap_size();
 
     void *ptr, *ptr2, *ptr3;
@@ -43,14 +44,14 @@ int main() {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block C
 
-    assert(gc_free_size() == heap_size - 3 * (alloc_size + meta_size));
+    assert(gc_free_size() == heap_size - 3 * block_size);
     assert(gc_block_collected() == 0);
 
     foo(); // block D, E, F allocated here
     assert(gc_root_size() == 3);
 
     gc_collect();
-    assert(gc_free_size() == heap_size - 3 * (alloc_size + meta_size));
+    assert(gc_free_size() == heap_size - 3 * block_size);
     assert(gc_block_collected() == 3);
 
     gc_pop();

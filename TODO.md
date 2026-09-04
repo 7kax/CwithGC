@@ -11,8 +11,8 @@
 | 状态 | 优先级 | 模块 | TODO | 完成标准 |
 | --- | --- | --- | --- | --- |
 | [x] | P0 | copying | 复制对象后，更新 to-space 对象内部的所有指针，而不是修改 from-space 源对象 | 嵌套对象、链表、树在 GC 后内部指针全部指向新空间；连续执行多次 GC 仍通过 |
-| [ ] | P0 | ref_count | 修复释放元数据后仍访问 `meta_ptr->size` 的 use-after-free | ASan 下 `ref_count_basic` 和 `ref_count_recursion` 无 UAF |
-| [ ] | P0 | copying / mark_sweep | 对每个分配块做最大对齐，并统一元数据、payload 和 free block 的地址计算 | UBSan alignment 检查无错误；不同大小的对象均可安全分配 |
+| [x] | P0 | ref_count | 修复释放元数据后仍访问 `meta_ptr->size` 的 use-after-free | ASan 下 `ref_count_basic` 和 `ref_count_recursion` 无 UAF |
+| [x] | P0 | all | 对每个分配块做最大对齐，并统一元数据、payload 和 free block 的地址计算 | UBSan alignment 检查无错误；不同大小的对象均可安全分配 |
 | [ ] | P0 | mark_sweep | 正确处理 `free_list == nullptr`，避免满堆或无空闲块时在 sweep 阶段断言失败 | 满堆分配后调用 `gc_collect()` 不崩溃；无法分配时统一进入 allocation failure |
 | [ ] | P0 | ref_count | 处理 `gc_ptr_copy(dst, src)` 的自赋值和释放顺序，避免先释放后增加引用 | `gc_ptr_copy(&p, p)`、别名赋值和字段替换在 ASan 下安全 |
 | [ ] | P0 | all | 检查 `size + sizeof(meta_data)` 及指针表大小计算的整数溢出 | 超大 size 被拒绝，不会绕回成小块并写越界 |
@@ -64,7 +64,7 @@
 ## 当前验证基线
 
 - [x] 普通 Clang 构建通过
-- [x] 当前 CTest：36/36 通过
+- [x] 当前 CTest：39/39 通过
 - [ ] ASan/UBSan 全量测试通过
 - [x] 连续 GC 的嵌套对象测试通过
 - [ ] Release（`NDEBUG`）测试通过

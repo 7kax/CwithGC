@@ -1,3 +1,4 @@
+#include "../gc_layout.h"
 #include "gc.h"
 
 #include <cassert>
@@ -24,15 +25,16 @@ struct meta_data {
     gc_ptr_table *ptr_table;
     size_t size;
     void *forwarding;
-    u_int8_t data[0];
 };
+
+static_assert(heap_size % gc_layout::alignment == 0);
 
 #ifdef GC_DEBUG
 size_t block_collected = 0;
 #endif
 
 static meta_data *get_meta_data(void *ptr) {
-    return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
+    return gc_layout::metadata<meta_data>(ptr);
 }
 
 static void *evacuate(void *ptr) {
@@ -47,7 +49,7 @@ static void *evacuate(void *ptr) {
     size_t block_size = old_meta->size;
     meta_data *new_meta = static_cast<meta_data *>(free_space);
     std::memcpy(new_meta, old_meta, block_size);
-    void *new_payload = reinterpret_cast<char *>(new_meta) + sizeof(meta_data);
+    void *new_payload = gc_layout::payload(new_meta);
     free_space = reinterpret_cast<char *>(free_space) + block_size;
 
 #ifdef GC_DEBUG
@@ -71,7 +73,7 @@ static void scan_object(meta_data *meta_ptr) {
     if (ptr_table == nullptr)
         return;
 
-    char *cur_struct = reinterpret_cast<char *>(meta_ptr) + sizeof(meta_data);
+    char *cur_struct = static_cast<char *>(gc_layout::payload(meta_ptr));
     for (size_t i = 0; i < ptr_table->array_len; i++) {
         for (size_t j = 0; j < ptr_table->num_pointers; j++) {
             void **child_ptr = reinterpret_cast<void **>(cur_struct + ptr_table->positions[j]);
@@ -95,7 +97,9 @@ void gc_init() {
 }
 
 void *gc_malloc(size_t size) {
-    size_t alloc_size = size + sizeof(meta_data);
+    size_t alloc_size;
+    if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size)
+        gc_allocation_failure();
 
     // If the allocation size is larger than the free size, collect garbage
     if (alloc_size > free_size)
@@ -117,9 +121,10 @@ void *gc_malloc(size_t size) {
     block->size = alloc_size;
 
     // Clear the block
-    std::memset(block->data, 0, size);
+    void *payload = gc_layout::payload(block);
+    std::memset(payload, 0, size);
 
-    return &block->data;
+    return payload;
 }
 
 void gc_local_var(void **ptr) {
@@ -206,7 +211,7 @@ size_t gc_block_collected() {
     return block_collected;
 }
 size_t gc_meta_size() {
-    return sizeof(meta_data);
+    return gc_layout::header_size<meta_data>;
 }
 size_t gc_root_size() {
     return root.size();

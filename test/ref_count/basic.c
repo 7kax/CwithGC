@@ -1,10 +1,11 @@
+#include "../test_layout.h"
 #include "gc.h"
 
 #include <assert.h>
 #include <stdio.h>
 
 int main() {
-    const size_t meta_size = gc_meta_size();
+    const size_t int_block_size = test_gc_block_size(sizeof(int));
     const size_t heap_size = gc_heap_size();
 
     gc_init();
@@ -35,14 +36,14 @@ int main() {
     assert(*ptr3 == 44);
 
     // 查看内存使用情况
-    assert(gc_free_size() == heap_size - 3 * (sizeof(int) + meta_size));
+    assert(gc_free_size() == heap_size - 3 * int_block_size);
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 3);
 
     // 将ptr1设为NULL，应该触发垃圾回收
     gc_ptr_copy(&ptr1, NULL);
     assert(gc_block_collected() == 1);
-    assert(gc_free_size() == heap_size - 2 * (sizeof(int) + meta_size));
+    assert(gc_free_size() == heap_size - 2 * int_block_size);
 
     // 检查其余值是否完好
     assert(*ptr2 == 43);

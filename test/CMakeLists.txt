@@ -28,3 +28,10 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
         endif()
     endforeach()
 endforeach()
+
+# Shared allocation-contract tests run against every collector.
+foreach(GC_ALGORITHM ${GC_ALGORITHMS})
+    add_executable(${GC_ALGORITHM}_alignment alignment.c)
+    target_link_libraries(${GC_ALGORITHM}_alignment gc_${GC_ALGORITHM})
+    add_test(NAME ${GC_ALGORITHM}_alignment COMMAND ${GC_ALGORITHM}_alignment)
+endforeach()

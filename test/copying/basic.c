@@ -1,10 +1,11 @@
+#include "../test_layout.h"
 #include "gc.h"
 
 #include <assert.h>
 #include <stdio.h>
 
 int main() {
-    const size_t meta_size = gc_meta_size();
+    const size_t int_block_size = test_gc_block_size(sizeof(int));
     const size_t heap_size = gc_heap_size();
 
     gc_init();
@@ -56,7 +57,7 @@ int main() {
     // Collect garbage again
     gc_collect();
     assert(gc_block_collected() == 5); // 3 + 2
-    assert(gc_free_size() == heap_size - 2 * (sizeof(int) + meta_size));
+    assert(gc_free_size() == heap_size - 2 * int_block_size);
 
     // Check if the values are still intact
     assert(*ptr2 == 43);

@@ -1,3 +1,4 @@
+#include "../gc_layout.h"
 #include "gc.h"
 #include <cassert>
 #include <cstdlib>
@@ -25,18 +26,22 @@ struct meta_data {
     u_int8_t marked;         // Marked flag (1 byte)
     gc_ptr_table *ptr_table; // Pointer table
     size_t size;             // Size of the block
-    u_int8_t data[0];        // Data of the block
 };
+
+static_assert(heap_size % gc_layout::alignment == 0);
+static_assert(gc_layout::alignment >= alignof(free_block));
+
+constexpr size_t minimum_free_block_size = gc_layout::align_up(sizeof(free_block));
 
 #ifdef GC_DEBUG
 size_t block_collected = 0; // Number of blocks collected
 #endif
 
 static meta_data *get_meta_data(void *ptr) {
-    return (meta_data *)((u_int64_t)ptr - sizeof(meta_data));
+    return gc_layout::metadata<meta_data>(ptr);
 }
 
-static void *pick_free_block(size_t size) {
+static void *pick_free_block(size_t size, size_t &allocated_size) {
     assert(free_list != nullptr);
     assert(size > 0);
 
@@ -65,10 +70,13 @@ static void *pick_free_block(size_t size) {
         }
     }
 
-    // Split the block if it is larger than the requested size
-    if (cur->size > size + sizeof(free_block)) {
+    const size_t current_size = cur->size;
+    const size_t remainder = current_size - size;
+
+    // Keep the remainder only when it can hold an aligned free-list node.
+    if (remainder >= minimum_free_block_size) {
         free_block *new_block = (free_block *)((u_int64_t)cur + size);
-        new_block->size = cur->size - size;
+        new_block->size = remainder;
         new_block->next = cur->next;
 
         if (prev == nullptr) {
@@ -78,6 +86,7 @@ static void *pick_free_block(size_t size) {
         }
 
         free_size -= size;
+        allocated_size = size;
         return cur;
     } else {
         if (prev == nullptr) {
@@ -86,7 +95,8 @@ static void *pick_free_block(size_t size) {
             prev->next = cur->next;
         }
 
-        free_size -= cur->size;
+        free_size -= current_size;
+        allocated_size = current_size;
         return cur;
     }
 }
@@ -140,12 +150,13 @@ static void sweep_phase() {
         } else {
             assert(sweeping < (u_int64_t)next_free_block);
             meta_data *meta_ptr = (meta_data *)sweeping;
+            const size_t block_size = meta_ptr->size;
 
             if (meta_ptr->marked == 0) {
                 // Unmarked block
                 // Add the block to the free list
                 free_block *new_free_block = (free_block *)sweeping;
-                new_free_block->size = meta_ptr->size;
+                new_free_block->size = block_size;
                 new_free_block->next = next_free_block;
 
                 if (prev_free_block != nullptr) {
@@ -155,7 +166,7 @@ static void sweep_phase() {
                 }
                 prev_free_block = new_free_block;
 
-                free_size += meta_ptr->size;
+                free_size += block_size;
 
 #ifdef GC_DEBUG
                 block_collected++;
@@ -166,7 +177,7 @@ static void sweep_phase() {
                 meta_ptr->marked = 0;
             }
 
-            sweeping += meta_ptr->size;
+            sweeping += block_size;
         }
     }
 
@@ -198,19 +209,24 @@ void gc_init() {
 }
 
 void *gc_malloc(size_t size) {
-    size_t alloc_size = size + sizeof(meta_data);
-    meta_data *block = (meta_data *)pick_free_block(alloc_size);
+    size_t requested_size;
+    if (!gc_layout::block_size<meta_data>(size, requested_size) || requested_size > heap_size)
+        gc_allocation_failure();
+
+    size_t allocated_size;
+    meta_data *block = (meta_data *)pick_free_block(requested_size, allocated_size);
     if (block == nullptr) {
         gc_allocation_failure();
     }
 
     block->ptr_table = nullptr;
-    block->size = alloc_size;
+    block->size = allocated_size;
     block->marked = 0;
 
-    std::memset(block->data, 0, size);
+    void *payload = gc_layout::payload(block);
+    std::memset(payload, 0, size);
 
-    return &block->data;
+    return payload;
 }
 
 void gc_local_var(void **ptr) {
@@ -277,7 +293,7 @@ size_t gc_block_collected() {
     return block_collected;
 }
 size_t gc_meta_size() {
-    return sizeof(meta_data);
+    return gc_layout::header_size<meta_data>;
 }
 size_t gc_root_size() {
     return root.size();
