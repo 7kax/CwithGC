@@ -42,7 +42,6 @@ static meta_data *get_meta_data(void *ptr) {
 }
 
 static void *pick_free_block(size_t size, size_t &allocated_size) {
-    assert(free_list != nullptr);
     assert(size > 0);
 
     free_block *prev = nullptr;
@@ -134,28 +133,29 @@ static void mark_phase() {
 }
 
 static void sweep_phase() {
-    u_int64_t heap_end = (u_int64_t)heap_start + heap_size;
+    char *heap_end = static_cast<char *>(heap_start) + heap_size;
 
-    u_int64_t sweeping = (u_int64_t)heap_start;
+    char *sweeping = static_cast<char *>(heap_start);
     free_block *next_free_block = free_list;
     free_block *prev_free_block = nullptr;
 
     while (sweeping < heap_end) {
-        if (sweeping == (u_int64_t)next_free_block) {
+        if (next_free_block != nullptr && sweeping == reinterpret_cast<char *>(next_free_block)) {
             // Skip the free block
             sweeping += next_free_block->size;
 
             prev_free_block = next_free_block;
             next_free_block = next_free_block->next;
         } else {
-            assert(sweeping < (u_int64_t)next_free_block);
-            meta_data *meta_ptr = (meta_data *)sweeping;
+            assert(next_free_block == nullptr ||
+                   sweeping < reinterpret_cast<char *>(next_free_block));
+            meta_data *meta_ptr = reinterpret_cast<meta_data *>(sweeping);
             const size_t block_size = meta_ptr->size;
 
             if (meta_ptr->marked == 0) {
                 // Unmarked block
                 // Add the block to the free list
-                free_block *new_free_block = (free_block *)sweeping;
+                free_block *new_free_block = reinterpret_cast<free_block *>(sweeping);
                 new_free_block->size = block_size;
                 new_free_block->next = next_free_block;
 

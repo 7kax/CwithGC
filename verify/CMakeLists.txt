@@ -28,3 +28,10 @@ foreach(TEST_NAME ${TEST_NAMES})
         endforeach()
     endif()
 endforeach()
+
+add_executable(mark_sweep_full_heap_alloc_fail full_heap_alloc_fail.c)
+target_link_libraries(mark_sweep_full_heap_alloc_fail gc_mark_sweep)
+add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
+set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
+    PASS_REGULAR_EXPRESSION "Allocation failed"
+)

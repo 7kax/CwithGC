@@ -8,6 +8,7 @@ set(TEST_NAMES
     recursion
     linked_list
     graph
+    full_heap
 )
 
 # 垃圾回收算法列表
