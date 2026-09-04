@@ -36,7 +36,7 @@ struct node *make_node(int data) {
 }
 
 int main() {
-    int elements[] = { 1, 2, 3, 4, 5 };
+    int elements[] = {1, 2, 3, 4, 5};
     int n = 5;
     ptr_map = construct_ptr_table();
 
@@ -57,27 +57,36 @@ int main() {
         gc_ptr_copy(&cur, new_node);
     }
 
-    // 记录第一个节点地址
-    struct node *pre_head = head;
-
-    // 触发垃圾收集
-    gc_collect();
-    assert(gc_block_collected() == n);
-
-    // 地址应该发生变化
-    assert(head != pre_head);
-
-    // 清理辅助指针
+    // Only the head keeps the list alive during collection.
     gc_ptr_copy(&cur, NULL);
     gc_ptr_copy(&new_node, NULL);
 
-    // 遍历链表检查值
-    for (int i = 0; i < n; i++) {
-        assert(head->data == elements[i]);
-        gc_ptr_copy((void **)&head, head->next);
+    const size_t live_size = gc_heap_size() - gc_free_size();
+    for (int round = 0; round < 3; round++) {
+        struct node *old_nodes[5];
+        struct node *node = head;
+        for (int i = 0; i < n; i++) {
+            assert(node != NULL);
+            old_nodes[i] = node;
+            node = node->next;
+        }
+        assert(node == NULL);
+
+        gc_collect();
+        assert(gc_block_collected() == (size_t)n * (round + 1));
+        assert(gc_free_size() == gc_heap_size() - live_size);
+
+        node = head;
+        for (int i = 0; i < n; i++) {
+            assert(node != NULL);
+            assert(node != old_nodes[i]);
+            assert(node->data == elements[i]);
+            node = node->next;
+        }
+        assert(node == NULL);
     }
 
-    assert(head == NULL);
+    gc_ptr_copy((void **)&head, NULL);
     assert(cur == NULL);
     assert(new_node == NULL);
 
@@ -87,6 +96,7 @@ int main() {
 
     gc_pop();
     gc_cleanup();
+    free(ptr_map);
     puts("Copying linked list test passed!");
 
     return 0;

@@ -7,6 +7,7 @@ set(TEST_NAMES
     func_call
     recursion
     linked_list
+    graph
 )
 
 # 垃圾回收算法列表
