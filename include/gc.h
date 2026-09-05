@@ -7,6 +7,7 @@ extern "C" {
 
 #define GC_DEBUG
 #include <stddef.h>
+#include <stdint.h>
 
 // Pointer table for recursive collection of structs containing pointers.
 typedef struct {
@@ -24,6 +25,21 @@ typedef struct {
     // position of the pointer in the struct
     size_t positions[0];
 } gc_ptr_table;
+
+/**
+ * @brief Calculate the storage required for a pointer table.
+ *
+ * @return Non-zero on success, zero if the calculation overflows or result is
+ * null.
+ */
+static inline int gc_ptr_table_size(size_t num_pointers, size_t *result) {
+    const size_t header_size = offsetof(gc_ptr_table, positions);
+    if (result == NULL || num_pointers > (SIZE_MAX - header_size) / sizeof(size_t))
+        return 0;
+
+    *result = header_size + num_pointers * sizeof(size_t);
+    return 1;
+}
 
 /**
  * @brief Initialize the garbage collector.

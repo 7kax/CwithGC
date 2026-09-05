@@ -37,3 +37,6 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     target_link_libraries(${GC_ALGORITHM}_alignment gc_${GC_ALGORITHM})
     add_test(NAME ${GC_ALGORITHM}_alignment COMMAND ${GC_ALGORITHM}_alignment)
 endforeach()
+
+add_executable(pointer_table_size pointer_table_size.c)
+add_test(NAME pointer_table_size COMMAND pointer_table_size)

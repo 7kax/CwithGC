@@ -27,7 +27,11 @@ int _main() {
 
 gc_ptr_table *ptr_map = NULL;
 void construct_ptr_table() {
-    ptr_map = malloc(sizeof(gc_ptr_table) + 2 * sizeof(size_t));
+    size_t table_size;
+    if (!gc_ptr_table_size(2, &table_size))
+        abort();
+    ptr_map = malloc(table_size);
+    assert(ptr_map != NULL);
     ptr_map->array_len = 1;
     ptr_map->struct_size = sizeof(struct tree_node);
     ptr_map->num_pointers = 2;

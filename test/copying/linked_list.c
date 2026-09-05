@@ -10,7 +10,11 @@ struct node {
 };
 
 gc_ptr_table *construct_ptr_table() {
-    gc_ptr_table *table = malloc(sizeof(gc_ptr_table) + 1 * sizeof(size_t));
+    size_t table_size;
+    if (!gc_ptr_table_size(1, &table_size))
+        abort();
+    gc_ptr_table *table = malloc(table_size);
+    assert(table != NULL);
 
     table->array_len = 1;
     table->struct_size = sizeof(struct node);

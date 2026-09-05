@@ -32,6 +32,11 @@ static meta_data *get_meta_data(void *ptr) {
     return gc_layout::metadata<meta_data>(ptr);
 }
 
+[[noreturn]] static void invalid_pointer_table() {
+    std::cerr << "Invalid pointer table" << std::endl;
+    std::abort();
+}
+
 // 增加引用计数
 static void increment_ref_count(void *ptr) {
     assert(ptr != nullptr);
@@ -54,8 +59,8 @@ static void decrement_ref_count(void *ptr) {
         // 减少子对象的引用计数
         if (meta_ptr->ptr_table != nullptr) {
             u_int64_t cur_struct = (u_int64_t)ptr;
-            for (int i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-                for (int j = 0; j < meta_ptr->ptr_table->num_pointers; j++) {
+            for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
+                for (size_t j = 0; j < meta_ptr->ptr_table->num_pointers; j++) {
                     void **child_ptr = (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
                     if (*child_ptr != nullptr) {
                         decrement_ref_count(*child_ptr);
@@ -131,6 +136,12 @@ void gc_register(void *ptr, gc_ptr_table *ptr_map) {
     assert(ptr_map->array_len > 0);
     assert(ptr_map->struct_size > 0);
     assert(ptr_map->num_pointers > 0);
+
+    size_t table_size;
+    size_t payload_size;
+    if (!gc_ptr_table_size(ptr_map->num_pointers, &table_size) ||
+        !gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size))
+        invalid_pointer_table();
 
     meta_ptr->ptr_table = ptr_map;
 }

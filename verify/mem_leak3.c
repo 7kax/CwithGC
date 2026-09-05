@@ -31,7 +31,11 @@ int _main() {
 gc_ptr_table *ptr_map = NULL;
 gc_ptr_table *ptr_map_array = NULL;
 void construct_ptr_table_array() {
-    ptr_map_array = malloc(sizeof(gc_ptr_table) + 2 * sizeof(size_t));
+    size_t table_size;
+    if (!gc_ptr_table_size(2, &table_size))
+        abort();
+    ptr_map_array = malloc(table_size);
+    assert(ptr_map_array != NULL);
     ptr_map_array->array_len = 10;
     ptr_map_array->struct_size = sizeof(struct tree_node);
     ptr_map_array->num_pointers = 2;
@@ -39,7 +43,11 @@ void construct_ptr_table_array() {
     ptr_map_array->positions[1] = offsetof(struct tree_node, right);
 };
 void construct_ptr_table() {
-    ptr_map = malloc(sizeof(gc_ptr_table) + 2 * sizeof(size_t));
+    size_t table_size;
+    if (!gc_ptr_table_size(2, &table_size))
+        abort();
+    ptr_map = malloc(table_size);
+    assert(ptr_map != NULL);
     ptr_map->array_len = 1;
     ptr_map->struct_size = sizeof(struct tree_node);
     ptr_map->num_pointers = 2;

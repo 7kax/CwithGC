@@ -35,3 +35,19 @@ add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc
 set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
     PASS_REGULAR_EXPRESSION "Allocation failed"
 )
+
+foreach(GC_ALGORITHM ${GC_ALGORITHMS})
+    foreach(TEST_NAME oversized_alloc overflowing_ptr_table)
+        set(EXECUTABLE_NAME ${GC_ALGORITHM}_${TEST_NAME})
+        add_executable(${EXECUTABLE_NAME} ${TEST_NAME}.c)
+        target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+        add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
+    endforeach()
+
+    set_tests_properties(${GC_ALGORITHM}_oversized_alloc PROPERTIES
+        PASS_REGULAR_EXPRESSION "Allocation fail"
+    )
+    set_tests_properties(${GC_ALGORITHM}_overflowing_ptr_table PROPERTIES
+        PASS_REGULAR_EXPRESSION "Invalid pointer table"
+    )
+endforeach()

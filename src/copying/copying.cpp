@@ -37,6 +37,11 @@ static meta_data *get_meta_data(void *ptr) {
     return gc_layout::metadata<meta_data>(ptr);
 }
 
+[[noreturn]] static void invalid_pointer_table() {
+    std::cerr << "Invalid pointer table" << std::endl;
+    std::abort();
+}
+
 static void *evacuate(void *ptr) {
     meta_data *old_meta = get_meta_data(ptr);
 
@@ -145,6 +150,12 @@ void gc_register(void *ptr, gc_ptr_table *ptr_map) {
     assert(ptr_map->array_len > 0);
     assert(ptr_map->struct_size > 0);
     assert(ptr_map->num_pointers > 0);
+
+    size_t table_size;
+    size_t payload_size;
+    if (!gc_ptr_table_size(ptr_map->num_pointers, &table_size) ||
+        !gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size))
+        invalid_pointer_table();
 
     meta_ptr->ptr_table = ptr_map;
 }
