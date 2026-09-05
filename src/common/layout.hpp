@@ -17,9 +17,13 @@ constexpr bool checked_add(std::size_t lhs, std::size_t rhs, std::size_t &result
     return true;
 }
 
-constexpr bool checked_mul(std::size_t lhs, std::size_t rhs, std::size_t &result) {
+constexpr bool multiplication_fits(std::size_t lhs, std::size_t rhs) noexcept {
     constexpr std::size_t max_size = std::numeric_limits<std::size_t>::max();
-    if (lhs != 0 && rhs > max_size / lhs)
+    return lhs == 0 || rhs <= max_size / lhs;
+}
+
+constexpr bool checked_mul(std::size_t lhs, std::size_t rhs, std::size_t &result) {
+    if (!multiplication_fits(lhs, rhs))
         return false;
 
     result = lhs * rhs;
@@ -32,6 +36,16 @@ constexpr std::size_t align_up(std::size_t size) {
 }
 
 template <typename Metadata> inline constexpr std::size_t header_size = align_up(sizeof(Metadata));
+
+template <typename Metadata>
+bool payload_capacity(std::size_t block_size, std::size_t &result) noexcept {
+    constexpr std::size_t header = header_size<Metadata>;
+    if (block_size < header)
+        return false;
+
+    result = block_size - header;
+    return true;
+}
 
 template <typename Metadata> bool block_size(std::size_t payload_size, std::size_t &result) {
     constexpr std::size_t header = header_size<Metadata>;

@@ -20,8 +20,8 @@
 | [x] | 1 | P1 | all | 统一导出函数的异常边界，将 C++ 异常转换为明确的失败行为 | `std::bad_alloc` 等异常不会跨过 `extern "C"`；C 调用方只观察到文档规定的返回值或终止行为 |
 | [x] | 2 | P1 | all | 将每种收集器的 heap、root、free list 和统计数据封装到单一内部状态对象 | 删除散落的可变全局变量；初始化、收集和清理操作通过状态对象维护不变量 |
 | [x] | 2 | P1 | all | 使用 RAII 管理堆缓冲区和内部辅助资源，同时保留显式 `gc_init()` / `gc_cleanup()` C API | 初始化中途失败和重复清理不泄漏；资源释放不依赖手工维护多处分支 |
-| [ ] | 3 | P2 | common | 抽取共享的 `RootSet`、内存布局、pointer table 校验和 fatal error 组件 | 三种实现复用相同基础组件；删除重复逻辑且不改变各自算法语义 |
-| [ ] | 3 | P2 | all | 用 `std::byte`、受检范围和小型辅助类型替换裸整数地址运算与重复强制转换 | 核心扫描代码直接表达“块、payload、字段槽位”；边界检查集中且无未定义指针运算 |
+| [x] | 3 | P2 | common | 抽取共享的 `RootSet`、内存布局、pointer table 校验和 fatal error 组件 | 三种实现复用相同基础组件；删除重复逻辑且不改变各自算法语义 |
+| [x] | 3 | P2 | all | 用 `std::byte`、受检范围和小型辅助类型替换裸整数地址运算与重复强制转换 | 核心扫描代码直接表达“块、payload、字段槽位”；边界检查集中且无未定义指针运算 |
 | [ ] | 4 | P2 | collectors | 按 `ref_count` → `copying` → `mark_sweep` 顺序逐个重构，每次只迁移一种算法 | 每一步都是可独立审查的提交；对应专项测试、全量测试和 sanitizer 均通过 |
 | [ ] | 4 | P2 | CMake / CI | 增加 C ABI smoke test、严格警告、clang-format 和 sanitizer 检查 | C 与 C++ 调用方都纳入自动测试；新代码通过格式检查及约定的 warning/sanitizer 配置 |
 
@@ -53,9 +53,9 @@
 
 | 状态 | 优先级 | 模块 | TODO | 完成标准 |
 | --- | --- | --- | --- | --- |
-| [ ] | P1 | gc.h / all | 用标准类型替换 `u_int8_t`、`u_int64_t`，避免直接用整数承载指针运算 | 使用 `uint8_t`、`uintptr_t` 或标准字节指针运算 |
+| [x] | P1 | gc.h / all | 用标准类型替换 `u_int8_t`、`u_int64_t`，避免直接用整数承载指针运算 | 使用 `uint8_t`、`uintptr_t` 或标准字节指针运算 |
 | [x] | P1 | gc.h | 重新设计 `positions[0]`，避免依赖 C/C++ 的零长度数组扩展 | C11 和 C++20 的目标编译器都不依赖非标准扩展 |
-| [ ] | P1 | all | 避免通过整数比较/加法操作对象指针，统一使用安全的字节指针和边界检查 | UBSan、严格编译器和 32/64 位环境下行为明确 |
+| [x] | P1 | all | 避免通过整数比较/加法操作对象指针，统一使用安全的字节指针和边界检查 | UBSan、严格编译器和 32/64 位环境下行为明确 |
 | [ ] | P1 | debug API | 统一 `gc_mem_layout()` 的分配与释放方式；当前实现使用 `new[]`，测试使用 `free()` | ASan 不再报告 alloc/dealloc mismatch；最好提供 `gc_mem_layout_free()` |
 | [ ] | P1 | ref_count | 决定 `gc_mem_layout()` 是否支持引用计数实现，避免公开接口返回永远为 `nullptr` | 文档和实现一致，通用调试代码不会误用该接口 |
 
@@ -86,3 +86,9 @@
 - [ ] ASan/UBSan 全量测试通过
 - [x] 连续 GC 的嵌套对象测试通过
 - [ ] Release（`NDEBUG`）测试通过
+
+## 迭代中确认的已知问题
+
+- [ ] **root frame 获取方式会触发严格警告**：Clang 在 `-Wall -Wextra -Wpedantic -Werror` 下会以 `-Wframe-address` 拒绝 `__builtin_frame_address(1)`；当前严格构建只能暂时使用 `-Wno-error=frame-address`，应与 root 生命周期重设计一起解决。
+- [ ] **sanitizer 全量验证仍受 debug API 阻塞**：阶段 3 已用 ASan/UBSan/LeakSanitizer 验证 34 项安全测试；完整 CTest 仍需先修复 `gc_mem_layout()` 的 `new[]`/`free()` 分配释放不匹配，再纳入所有测试。
+- [ ] **cleanup 后的指针失效契约需要文档化**：`gc_cleanup()` 会释放包括仍存活对象在内的 GC 内存，调用方持有的 GC 指针随后均不可访问；应在 C API 文档中明确这一生命周期边界。

@@ -1,23 +1,19 @@
 #include "common/layout.hpp"
+#include "common/memory_layout.hpp"
 #include "common/pointer_table.hpp"
+#include "common/root_set.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <utility>
-#include <vector>
 
 namespace {
 
 constexpr size_t heap_size = 4 * 1024;
-
-struct stack_ptr {
-    void **ptr;
-    void *frame;
-};
 
 struct free_block {
     size_t size;
@@ -25,7 +21,7 @@ struct free_block {
 };
 
 struct meta_data {
-    u_int8_t marked;
+    std::uint8_t marked;
     const gc_ptr_table *ptr_table;
     size_t size;
 };
@@ -35,16 +31,12 @@ static_assert(gc_layout::alignment >= alignof(free_block));
 
 constexpr size_t minimum_free_block_size = gc_layout::align_up(sizeof(free_block));
 
-[[noreturn]] void invalid_pointer_table() {
-    gc_runtime::fatal("Invalid pointer table");
-}
-
 class MarkSweepState {
   public:
     void init() {
         auto new_heap = gc_runtime::malloc_bytes(heap_size);
 
-        release_roots();
+        roots_.clear();
         heap_ = std::move(new_heap);
         free_list_ = reinterpret_cast<free_block *>(heap_.get());
         free_list_->size = heap_size;
@@ -78,9 +70,7 @@ class MarkSweepState {
     void add_root(void *ptr_address, void *frame_address) {
         require_initialized();
 
-        auto **ptr = static_cast<void **>(ptr_address);
-        roots_.push_back({ptr, frame_address});
-        *ptr = nullptr;
+        roots_.add(ptr_address, frame_address);
     }
 
     void register_object(void *ptr, const gc_ptr_table *ptr_map) const noexcept {
@@ -89,17 +79,11 @@ class MarkSweepState {
         meta_data *meta_ptr = get_meta_data(ptr);
         assert(meta_ptr->ptr_table == nullptr);
 
-        if (ptr_map == nullptr)
-            invalid_pointer_table();
-        assert(ptr_map->array_len > 0);
-        assert(ptr_map->struct_size > 0);
-        assert(!ptr_map->positions.empty());
-
-        size_t payload_size;
-        const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
-        if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
-            payload_size > payload_capacity)
-            invalid_pointer_table();
+        size_t payload_capacity;
+        if (ptr_map == nullptr ||
+            !gc_layout::payload_capacity<meta_data>(meta_ptr->size, payload_capacity) ||
+            !gc_pointer_table::valid_for_payload(*ptr_map, payload_capacity))
+            gc_runtime::invalid_pointer_table();
 
         meta_ptr->ptr_table = ptr_map;
     }
@@ -117,12 +101,7 @@ class MarkSweepState {
 
     void pop_roots() noexcept {
         require_initialized();
-        if (roots_.empty())
-            return;
-
-        void *frame_address = roots_.back().frame;
-        while (!roots_.empty() && roots_.back().frame == frame_address)
-            roots_.pop_back();
+        roots_.pop_frame();
     }
 
     void cleanup() noexcept {
@@ -130,7 +109,7 @@ class MarkSweepState {
         free_list_ = nullptr;
         free_size_ = 0;
         block_collected_ = 0;
-        release_roots();
+        roots_.clear();
         initialized_ = false;
     }
 
@@ -143,7 +122,7 @@ class MarkSweepState {
     mem_block_info *memory_layout() const {
         require_initialized();
 
-        std::vector<mem_block_info> mem_blocks;
+        gc_layout::layout_builder layout;
         std::byte *heap_end = heap_.get() + heap_size;
         std::byte *scanning = heap_.get();
         free_block *next_free_block = free_list_;
@@ -152,20 +131,17 @@ class MarkSweepState {
             if (next_free_block != nullptr &&
                 scanning == reinterpret_cast<std::byte *>(next_free_block)) {
                 const size_t size = next_free_block->size;
-                mem_blocks.push_back({scanning, size, 1});
+                layout.add(scanning, size, true);
                 scanning += size;
                 next_free_block = next_free_block->next;
             } else {
                 auto *meta_ptr = reinterpret_cast<meta_data *>(scanning);
-                mem_blocks.push_back({scanning, meta_ptr->size, 0});
+                layout.add(scanning, meta_ptr->size, false);
                 scanning += meta_ptr->size;
             }
         }
 
-        auto *layout = new mem_block_info[mem_blocks.size() + 1];
-        std::copy(mem_blocks.begin(), mem_blocks.end(), layout);
-        layout[mem_blocks.size()] = {nullptr, 0, 0};
-        return layout;
+        return layout.release();
     }
 
   private:
@@ -173,10 +149,7 @@ class MarkSweepState {
         return gc_layout::metadata<meta_data>(ptr);
     }
 
-    void require_initialized() const noexcept {
-        if (!initialized_)
-            gc_runtime::fatal("GC is not initialized");
-    }
+    void require_initialized() const noexcept { gc_runtime::require_initialized(initialized_); }
 
     void *pick_free_block(size_t size, size_t &allocated_size) noexcept {
         assert(size > 0);
@@ -237,23 +210,18 @@ class MarkSweepState {
         if (meta_ptr->ptr_table == nullptr)
             return;
 
-        auto *cur_struct = static_cast<std::byte *>(ptr);
-        for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-            for (size_t position : meta_ptr->ptr_table->positions) {
-                auto **child_ptr = reinterpret_cast<void **>(cur_struct + position);
-                if (*child_ptr != nullptr)
-                    mark(*child_ptr);
-            }
-            cur_struct += meta_ptr->ptr_table->struct_size;
-        }
+        gc_pointer_table::for_each_field(*meta_ptr->ptr_table, ptr,
+                                         [this](void **child_ptr) noexcept {
+                                             if (*child_ptr != nullptr)
+                                                 mark(*child_ptr);
+                                         });
     }
 
     void mark_phase() noexcept {
-        for (auto [ptr, frame] : roots_) {
-            (void)frame;
+        roots_.for_each([this](void **ptr) noexcept {
             if (*ptr != nullptr)
                 mark(*ptr);
-        }
+        });
     }
 
     void sweep_phase() noexcept {
@@ -306,14 +274,9 @@ class MarkSweepState {
         }
     }
 
-    void release_roots() noexcept {
-        std::vector<stack_ptr> empty;
-        roots_.swap(empty);
-    }
-
     bool initialized_ = false;
     gc_runtime::malloc_ptr<> heap_;
-    std::vector<stack_ptr> roots_;
+    gc_runtime::root_set roots_;
     free_block *free_list_ = nullptr;
     size_t free_size_ = 0;
     size_t block_collected_ = 0;

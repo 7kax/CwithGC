@@ -1,26 +1,22 @@
 #include "common/layout.hpp"
+#include "common/memory_layout.hpp"
 #include "common/pointer_table.hpp"
+#include "common/root_set.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <utility>
-#include <vector>
 
 namespace {
 
 constexpr size_t heap_size = 4 * 1024;
 
-struct stack_ptr {
-    void **ptr;
-    void *frame;
-};
-
 struct meta_data {
-    u_int8_t copied;
+    std::uint8_t copied;
     const gc_ptr_table *ptr_table;
     size_t size;
     void *forwarding;
@@ -28,17 +24,13 @@ struct meta_data {
 
 static_assert(heap_size % gc_layout::alignment == 0);
 
-[[noreturn]] void invalid_pointer_table() {
-    gc_runtime::fatal("Invalid pointer table");
-}
-
 class CopyingState {
   public:
     void init() {
         auto new_from = gc_runtime::malloc_bytes(heap_size);
         auto new_to = gc_runtime::malloc_bytes(heap_size);
 
-        release_roots();
+        roots_.clear();
         from_ = std::move(new_from);
         to_ = std::move(new_to);
         free_space_ = from_.get();
@@ -76,9 +68,7 @@ class CopyingState {
     void add_root(void *ptr_address, void *frame_address) {
         require_initialized();
 
-        auto **ptr = static_cast<void **>(ptr_address);
-        roots_.push_back({ptr, frame_address});
-        *ptr = nullptr;
+        roots_.add(ptr_address, frame_address);
     }
 
     void register_object(void *ptr, const gc_ptr_table *ptr_map) const noexcept {
@@ -87,17 +77,11 @@ class CopyingState {
         meta_data *meta_ptr = get_meta_data(ptr);
         assert(meta_ptr->ptr_table == nullptr);
 
-        if (ptr_map == nullptr)
-            invalid_pointer_table();
-        assert(ptr_map->array_len > 0);
-        assert(ptr_map->struct_size > 0);
-        assert(!ptr_map->positions.empty());
-
-        size_t payload_size;
-        const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
-        if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
-            payload_size > payload_capacity)
-            invalid_pointer_table();
+        size_t payload_capacity;
+        if (ptr_map == nullptr ||
+            !gc_layout::payload_capacity<meta_data>(meta_ptr->size, payload_capacity) ||
+            !gc_pointer_table::valid_for_payload(*ptr_map, payload_capacity))
+            gc_runtime::invalid_pointer_table();
 
         meta_ptr->ptr_table = ptr_map;
     }
@@ -113,11 +97,10 @@ class CopyingState {
         free_space_ = to_.get();
         std::byte *scan = to_.get();
 
-        for (auto [ptr_address, frame] : roots_) {
-            (void)frame;
+        roots_.for_each([this](void **ptr_address) noexcept {
             if (*ptr_address != nullptr)
                 *ptr_address = evacuate(*ptr_address);
-        }
+        });
 
         // Objects copied while scanning are appended at free_space, so the
         // to-space itself acts as the breadth-first work queue.
@@ -134,12 +117,7 @@ class CopyingState {
 
     void pop_roots() noexcept {
         require_initialized();
-        if (roots_.empty())
-            return;
-
-        void *frame_address = roots_.back().frame;
-        while (!roots_.empty() && roots_.back().frame == frame_address)
-            roots_.pop_back();
+        roots_.pop_frame();
     }
 
     void cleanup() noexcept {
@@ -148,7 +126,7 @@ class CopyingState {
         free_space_ = nullptr;
         free_size_ = 0;
         block_collected_ = 0;
-        release_roots();
+        roots_.clear();
         initialized_ = false;
     }
 
@@ -161,19 +139,15 @@ class CopyingState {
     mem_block_info *memory_layout() const {
         require_initialized();
 
-        std::vector<mem_block_info> mem_layout;
+        gc_layout::layout_builder layout;
         std::byte *current = from_.get();
         while (current < free_space_) {
             auto *meta_ptr = reinterpret_cast<meta_data *>(current);
-            mem_layout.push_back({current, meta_ptr->size, 0});
+            layout.add(current, meta_ptr->size, false);
             current += meta_ptr->size;
         }
-        mem_layout.push_back({free_space_, free_size_, 1});
-
-        auto *layout = new mem_block_info[mem_layout.size() + 1];
-        std::copy(mem_layout.begin(), mem_layout.end(), layout);
-        layout[mem_layout.size()] = {nullptr, 0, 0};
-        return layout;
+        layout.add(free_space_, free_size_, true);
+        return layout.release();
     }
 
   private:
@@ -181,10 +155,7 @@ class CopyingState {
         return gc_layout::metadata<meta_data>(ptr);
     }
 
-    void require_initialized() const noexcept {
-        if (!initialized_)
-            gc_runtime::fatal("GC is not initialized");
-    }
+    void require_initialized() const noexcept { gc_runtime::require_initialized(initialized_); }
 
     void *evacuate(void *ptr) noexcept {
         meta_data *old_meta = get_meta_data(ptr);
@@ -212,20 +183,11 @@ class CopyingState {
         if (ptr_table == nullptr)
             return;
 
-        auto *cur_struct = static_cast<std::byte *>(gc_layout::payload(meta_ptr));
-        for (size_t i = 0; i < ptr_table->array_len; i++) {
-            for (size_t position : ptr_table->positions) {
-                auto **child_ptr = reinterpret_cast<void **>(cur_struct + position);
-                if (*child_ptr != nullptr)
-                    *child_ptr = evacuate(*child_ptr);
-            }
-            cur_struct += ptr_table->struct_size;
-        }
-    }
-
-    void release_roots() noexcept {
-        std::vector<stack_ptr> empty;
-        roots_.swap(empty);
+        gc_pointer_table::for_each_field(*ptr_table, gc_layout::payload(meta_ptr),
+                                         [this](void **child_ptr) noexcept {
+                                             if (*child_ptr != nullptr)
+                                                 *child_ptr = evacuate(*child_ptr);
+                                         });
     }
 
     bool initialized_ = false;
@@ -233,7 +195,7 @@ class CopyingState {
     gc_runtime::malloc_ptr<> to_;
     std::byte *free_space_ = nullptr;
     size_t free_size_ = 0;
-    std::vector<stack_ptr> roots_;
+    gc_runtime::root_set roots_;
     size_t block_collected_ = 0;
 };
 

@@ -29,6 +29,15 @@ template <typename T = std::byte> malloc_ptr<T> malloc_bytes(std::size_t size) {
     std::abort();
 }
 
+[[noreturn]] inline void invalid_pointer_table() noexcept {
+    fatal("Invalid pointer table");
+}
+
+inline void require_initialized(bool initialized) noexcept {
+    if (!initialized)
+        fatal("GC is not initialized");
+}
+
 [[noreturn]] inline void handle_current_exception() noexcept {
     try {
         throw;

@@ -12,4 +12,23 @@ struct gc_ptr_table {
     std::vector<std::size_t> positions;
 };
 
+namespace gc_pointer_table {
+
+bool valid_shape(std::size_t array_len, std::size_t struct_size, std::size_t num_pointers,
+                 const std::size_t *positions) noexcept;
+
+bool valid_for_payload(const gc_ptr_table &table, std::size_t payload_capacity) noexcept;
+
+template <typename Visitor>
+void for_each_field(const gc_ptr_table &table, void *payload, Visitor &&visitor) noexcept {
+    auto *current = static_cast<std::byte *>(payload);
+    for (std::size_t i = 0; i < table.array_len; ++i) {
+        for (std::size_t position : table.positions)
+            visitor(reinterpret_cast<void **>(current + position));
+        current += table.struct_size;
+    }
+}
+
+} // namespace gc_pointer_table
+
 #endif // CWITHGC_COMMON_POINTER_TABLE_HPP

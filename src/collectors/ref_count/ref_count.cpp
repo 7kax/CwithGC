@@ -1,22 +1,18 @@
 #include "common/layout.hpp"
 #include "common/pointer_table.hpp"
+#include "common/root_set.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <unordered_set>
-#include <vector>
 
 namespace {
 
 constexpr size_t heap_size = 4 * 1024;
-
-struct stack_ptr {
-    void **ptr;
-    void *frame;
-};
 
 struct meta_data {
     const gc_ptr_table *ptr_table;
@@ -24,17 +20,13 @@ struct meta_data {
     size_t size;
 };
 
-[[noreturn]] void invalid_pointer_table() {
-    gc_runtime::fatal("Invalid pointer table");
-}
-
 class RefCountState {
   public:
     ~RefCountState() { release_allocations(); }
 
     void init() noexcept {
         release_allocations();
-        release_roots();
+        roots_.clear();
         free_size_ = heap_size;
         block_collected_ = 0;
         initialized_ = true;
@@ -65,9 +57,7 @@ class RefCountState {
     void add_root(void *ptr_address, void *frame_address) {
         require_initialized();
 
-        auto **ptr = static_cast<void **>(ptr_address);
-        roots_.push_back({ptr, frame_address});
-        *ptr = nullptr;
+        roots_.add(ptr_address, frame_address);
     }
 
     void register_object(void *ptr, const gc_ptr_table *ptr_map) {
@@ -76,17 +66,11 @@ class RefCountState {
         meta_data *meta_ptr = get_meta_data(ptr);
         assert(meta_ptr->ptr_table == nullptr);
 
-        if (ptr_map == nullptr)
-            invalid_pointer_table();
-        assert(ptr_map->array_len > 0);
-        assert(ptr_map->struct_size > 0);
-        assert(!ptr_map->positions.empty());
-
-        size_t payload_size;
-        const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
-        if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
-            payload_size > payload_capacity)
-            invalid_pointer_table();
+        size_t payload_capacity;
+        if (ptr_map == nullptr ||
+            !gc_layout::payload_capacity<meta_data>(meta_ptr->size, payload_capacity) ||
+            !gc_pointer_table::valid_for_payload(*ptr_map, payload_capacity))
+            gc_runtime::invalid_pointer_table();
 
         meta_ptr->ptr_table = ptr_map;
     }
@@ -117,21 +101,12 @@ class RefCountState {
 
     void pop_roots() noexcept {
         require_initialized();
-        if (roots_.empty())
-            return;
-
-        void *frame_address = roots_.back().frame;
-        while (!roots_.empty() && roots_.back().frame == frame_address) {
-            void **ptr = roots_.back().ptr;
-            if (*ptr != nullptr)
-                decrement_ref_count(*ptr);
-            roots_.pop_back();
-        }
+        roots_.pop_frame([this](void *ptr) noexcept { decrement_ref_count(ptr); });
     }
 
     void cleanup() noexcept {
         release_allocations();
-        release_roots();
+        roots_.clear();
         free_size_ = 0;
         block_collected_ = 0;
         initialized_ = false;
@@ -148,10 +123,7 @@ class RefCountState {
         return gc_layout::metadata<meta_data>(ptr);
     }
 
-    void require_initialized() const noexcept {
-        if (!initialized_)
-            gc_runtime::fatal("GC is not initialized");
-    }
+    void require_initialized() const noexcept { gc_runtime::require_initialized(initialized_); }
 
     static void increment_ref_count(void *ptr) noexcept {
         assert(ptr != nullptr);
@@ -168,15 +140,11 @@ class RefCountState {
             return;
 
         if (meta_ptr->ptr_table != nullptr) {
-            u_int64_t cur_struct = (u_int64_t)ptr;
-            for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-                for (size_t j = 0; j < meta_ptr->ptr_table->positions.size(); j++) {
-                    void **child_ptr = (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
-                    if (*child_ptr != nullptr)
-                        decrement_ref_count(*child_ptr);
-                }
-                cur_struct += meta_ptr->ptr_table->struct_size;
-            }
+            gc_pointer_table::for_each_field(*meta_ptr->ptr_table, ptr,
+                                             [this](void **child_ptr) noexcept {
+                                                 if (*child_ptr != nullptr)
+                                                     decrement_ref_count(*child_ptr);
+                                             });
         }
 
         const size_t released_size = meta_ptr->size;
@@ -195,14 +163,9 @@ class RefCountState {
         allocations_.swap(empty);
     }
 
-    void release_roots() noexcept {
-        std::vector<stack_ptr> empty;
-        roots_.swap(empty);
-    }
-
     bool initialized_ = false;
     size_t free_size_ = 0;
-    std::vector<stack_ptr> roots_;
+    gc_runtime::root_set roots_;
     std::unordered_set<meta_data *> allocations_;
     size_t block_collected_ = 0;
 };
