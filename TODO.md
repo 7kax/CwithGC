@@ -1,94 +1,94 @@
-# CwithGC TODO
+# TODO
 
-## 优先级说明
+## Priority Definitions
 
-- **P0**：会导致未定义行为、数据损坏或 GC 核心逻辑错误
-- **P1**：接口安全性、可移植性或资源管理问题
-- **P2**：测试、构建和可维护性改进
+- **P0**: Undefined behavior, data corruption, or errors in core GC logic
+- **P1**: API safety, portability, or resource-management issues
+- **P2**: Testing, build, and maintainability improvements
 
-## 架构方向：C API + C++20 实现
+## Architecture Direction: C API with a C++20 Implementation
 
-- `include/gc.h` 始终保持 C11 可用，并作为唯一公开接口；测试继续使用 C，持续验证真实的 C ABI。
-- `src/` 内部实现使用 C++20，可使用 RAII、标准容器、模板和类型安全的辅助抽象提升可读性。
-- 不在公开 ABI 中暴露 STL、模板、引用、异常或其他 C++ 类型，也不允许异常穿过 `extern "C"` 边界。
+- Keep `include/gc.h` compatible with C11 and use it as the sole public interface. Keep tests in C to continuously verify the real C ABI.
+- Implement internals under `src/` in C++20, using RAII, standard containers, templates, and type-safe helper abstractions where they improve readability.
+- Do not expose STL types, templates, references, exceptions, or other C++ types through the public ABI. Exceptions must never cross an `extern "C"` boundary.
 
-### 优化计划
+### Optimization Plan
 
-| 状态 | 阶段 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Phase | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- | --- |
-| [x] | 1 | P1 | gc.h / ABI | 固化纯 C 接口边界，并增加最小 C11、C++20 调用方编译测试 | 同一个 `gc.h` 可被严格 C11 和 C++20 编译；导出符号保持 C linkage；公共声明不依赖 C++ 类型 |
-| [x] | 1 | P1 | all | 统一导出函数的异常边界，将 C++ 异常转换为明确的失败行为 | `std::bad_alloc` 等异常不会跨过 `extern "C"`；C 调用方只观察到文档规定的返回值或终止行为 |
-| [x] | 2 | P1 | all | 将每种收集器的 heap、root、free list 和统计数据封装到单一内部状态对象 | 删除散落的可变全局变量；初始化、收集和清理操作通过状态对象维护不变量 |
-| [x] | 2 | P1 | all | 使用 RAII 管理堆缓冲区和内部辅助资源，同时保留显式 `gc_init()` / `gc_cleanup()` C API | 初始化中途失败和重复清理不泄漏；资源释放不依赖手工维护多处分支 |
-| [x] | 3 | P2 | common | 抽取共享的 `RootSet`、内存布局、pointer table 校验和 fatal error 组件 | 三种实现复用相同基础组件；删除重复逻辑且不改变各自算法语义 |
-| [x] | 3 | P2 | all | 用 `std::byte`、受检范围和小型辅助类型替换裸整数地址运算与重复强制转换 | 核心扫描代码直接表达“块、payload、字段槽位”；边界检查集中且无未定义指针运算 |
-| [ ] | 4 | P2 | collectors | 按 `ref_count` → `copying` → `mark_sweep` 顺序逐个重构，每次只迁移一种算法 | 每一步都是可独立审查的提交；对应专项测试、全量测试和 sanitizer 均通过 |
-| [ ] | 4 | P2 | CMake / CI | 增加 C ABI smoke test、严格警告、clang-format 和 sanitizer 检查 | C 与 C++ 调用方都纳入自动测试；新代码通过格式检查及约定的 warning/sanitizer 配置 |
+| [x] | 1 | P1 | gc.h / ABI | Establish a pure C interface boundary and add minimal C11 and C++20 caller compilation tests | The same `gc.h` compiles under strict C11 and C++20; exported symbols retain C linkage; public declarations do not depend on C++ types |
+| [x] | 1 | P1 | all | Standardize exception boundaries for exported functions and convert C++ exceptions into explicit failure behavior | Exceptions such as `std::bad_alloc` never cross `extern "C"`; C callers observe only documented return values or termination behavior |
+| [x] | 2 | P1 | all | Encapsulate each collector's heap, roots, free list, and statistics in one internal state object | Scattered mutable globals are removed; initialization, collection, and cleanup maintain invariants through the state object |
+| [x] | 2 | P1 | all | Use RAII for heap buffers and internal helper resources while retaining the explicit `gc_init()` / `gc_cleanup()` C API | Partial initialization failures and repeated cleanup do not leak; resource release does not depend on manually maintained branches |
+| [x] | 3 | P2 | common | Extract shared `RootSet`, memory-layout, pointer-table validation, and fatal-error components | All three implementations reuse the same foundation; duplicate logic is removed without changing collector semantics |
+| [x] | 3 | P2 | all | Replace raw integer address arithmetic and repeated casts with `std::byte`, checked ranges, and small helper types | Core scanning code directly expresses blocks, payloads, and field slots; bounds checks are centralized and pointer arithmetic has no undefined behavior |
+| [ ] | 4 | P2 | collectors | Refactor collectors one at a time in the order `ref_count` -> `copying` -> `mark_sweep` | Each step is an independently reviewable commit; focused tests, the full suite, and sanitizers pass |
+| [ ] | 4 | P2 | CMake / CI | Add C ABI smoke tests, strict warnings, clang-format checks, and sanitizer checks | C and C++ callers are covered by automated tests; new code passes formatting and the agreed warning/sanitizer configurations |
 
-## 核心正确性
+## Core Correctness
 
-| 状态 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
-| [x] | P0 | copying | 复制对象后，更新 to-space 对象内部的所有指针，而不是修改 from-space 源对象 | 嵌套对象、链表、树在 GC 后内部指针全部指向新空间；连续执行多次 GC 仍通过 |
-| [x] | P0 | ref_count | 修复释放元数据后仍访问 `meta_ptr->size` 的 use-after-free | ASan 下 `ref_count_basic` 和 `ref_count_recursion` 无 UAF |
-| [x] | P0 | all | 对每个分配块做最大对齐，并统一元数据、payload 和 free block 的地址计算 | UBSan alignment 检查无错误；不同大小的对象均可安全分配 |
-| [x] | P0 | mark_sweep | 正确处理 `free_list == nullptr`，避免满堆或无空闲块时在 sweep 阶段断言失败 | 满堆分配后调用 `gc_collect()` 不崩溃；无法分配时统一进入 allocation failure |
-| [x] | P0 | ref_count | 处理 `gc_ptr_copy(dst, src)` 的自赋值和释放顺序，避免先释放后增加引用 | `gc_ptr_copy(&p, p)`、别名赋值和字段替换在 ASan 下安全 |
-| [x] | P0 | all | 检查 `size + sizeof(meta_data)` 及指针表大小计算的整数溢出 | 超大 size 被拒绝，不会绕回成小块并写越界 |
+| [x] | P0 | copying | After copying an object, update every pointer inside the to-space object instead of modifying the from-space source | Nested objects, linked lists, and trees contain only pointers into the new space after GC; repeated collections continue to pass |
+| [x] | P0 | ref_count | Fix the use-after-free caused by reading `meta_ptr->size` after freeing metadata | `ref_count_basic` and `ref_count_recursion` report no UAF under ASan |
+| [x] | P0 | all | Apply maximum alignment to every allocation block and standardize metadata, payload, and free-block address calculations | UBSan alignment checks report no errors; objects of varying sizes can be allocated safely |
+| [x] | P0 | mark_sweep | Handle `free_list == nullptr` correctly so sweep does not assert when the heap is full or has no free blocks | Calling `gc_collect()` after filling the heap does not crash; allocation failure follows the common failure path |
+| [x] | P0 | ref_count | Handle self-assignment and release ordering in `gc_ptr_copy(dst, src)` so the old reference is not released before the new one is retained | `gc_ptr_copy(&p, p)`, aliased assignments, and field replacements are safe under ASan |
+| [x] | P0 | all | Check integer overflow in `size + sizeof(meta_data)` and pointer-table size calculations | Oversized requests are rejected instead of wrapping to a small allocation and writing out of bounds |
 
-## 生命周期与接口
+## Lifecycle and API
 
-| 状态 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
-| [x] | P1 | all | 为 `gc_init()`、`gc_collect()`、`gc_malloc()`、`gc_cleanup()` 增加初始化状态检查，并处理重复初始化 | 未初始化、重复初始化、清理后调用都得到明确行为 |
-| [x] | P1 | all | 让空 root 集合调用 `gc_pop()` 安全返回 | 不再访问空 vector 的 `back()` |
-| [ ] | P1 | all | 重新设计 root 生命周期，减少对 `__builtin_frame_address(1)` 的依赖 | 在优化构建、不同编译器和递归调用下行为稳定；最好改为显式 scope/token API |
-| [ ] | P1 | all | 明确 `gc_local_var()`、`gc_ptr_copy()` 的所有权和调用约束 | 文档说明哪些指针必须注册、哪些字段必须通过 `gc_ptr_copy()` 更新 |
-| [x] | P1 | ref_count | 让 `gc_cleanup()` 释放仍存活的对象，或明确要求调用者先释放全部引用 | LeakSanitizer 无遗留 GC 对象；cleanup 后状态一致 |
-| [ ] | P1 | ref_count | 明确或实现循环引用回收 | 文档明确“循环引用不会回收”，或增加 cycle collector 测试与实现 |
-| [x] | P1 | all | 为 `gc_register()` 校验 pointer table 的范围、offset、数组长度和对象 payload 大小 | 非法指针表被拒绝，不会在 mark/copy/decrement 阶段越界 |
-| [x] | P1 | all | 明确 pointer table 的所有权和生命周期，避免 metadata 保存悬空 table 指针 | pointer table 在对象生命周期内有效，且不产生未释放的辅助内存 |
+| [x] | P1 | all | Add initialization-state checks to `gc_init()`, `gc_collect()`, `gc_malloc()`, and `gc_cleanup()`, including repeated initialization | Calls before initialization, repeated initialization, and calls after cleanup all have defined behavior |
+| [x] | P1 | all | Make `gc_pop()` return safely when the root set is empty | The implementation no longer calls `back()` on an empty vector |
+| [ ] | P1 | all | Redesign root lifetime management to reduce reliance on `__builtin_frame_address(1)` | Behavior is stable under optimized builds, different compilers, and recursive calls; preferably use an explicit scope/token API |
+| [ ] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
+| [x] | P1 | ref_count | Make `gc_cleanup()` release live objects, or explicitly require callers to release every reference first | LeakSanitizer reports no remaining GC objects; state is consistent after cleanup |
+| [ ] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |
+| [x] | P1 | all | Validate pointer-table ranges, offsets, array lengths, and object payload sizes in `gc_register()` | Invalid pointer tables are rejected and cannot cause out-of-bounds access during mark, copy, or decrement operations |
+| [x] | P1 | all | Define pointer-table ownership and lifetime so metadata cannot retain dangling table pointers | A pointer table remains valid for the object's lifetime and does not leak auxiliary memory |
 
-## 内存布局与可移植性
+## Memory Layout and Portability
 
-| 状态 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
-| [x] | P1 | gc.h / all | 用标准类型替换 `u_int8_t`、`u_int64_t`，避免直接用整数承载指针运算 | 使用 `uint8_t`、`uintptr_t` 或标准字节指针运算 |
-| [x] | P1 | gc.h | 重新设计 `positions[0]`，避免依赖 C/C++ 的零长度数组扩展 | C11 和 C++20 的目标编译器都不依赖非标准扩展 |
-| [x] | P1 | all | 避免通过整数比较/加法操作对象指针，统一使用安全的字节指针和边界检查 | UBSan、严格编译器和 32/64 位环境下行为明确 |
-| [ ] | P1 | debug API | 统一 `gc_mem_layout()` 的分配与释放方式；当前实现使用 `new[]`，测试使用 `free()` | ASan 不再报告 alloc/dealloc mismatch；最好提供 `gc_mem_layout_free()` |
-| [ ] | P1 | ref_count | 决定 `gc_mem_layout()` 是否支持引用计数实现，避免公开接口返回永远为 `nullptr` | 文档和实现一致，通用调试代码不会误用该接口 |
+| [x] | P1 | gc.h / all | Replace `u_int8_t` and `u_int64_t` with standard types and avoid representing pointer arithmetic directly as integers | Use `uint8_t`, `uintptr_t`, or standard byte-pointer arithmetic |
+| [x] | P1 | gc.h | Redesign `positions[0]` to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
+| [x] | P1 | all | Avoid integer comparisons and arithmetic on object pointers; use safe byte pointers and bounds checks consistently | Behavior is defined under UBSan, strict compilers, and 32-bit and 64-bit environments |
+| [ ] | P1 | debug API | Standardize allocation and deallocation for `gc_mem_layout()`; the implementation currently uses `new[]` while tests use `free()` | ASan no longer reports an allocation/deallocation mismatch; preferably provide `gc_mem_layout_free()` |
+| [ ] | P1 | ref_count | Decide whether `gc_mem_layout()` supports the reference-counting implementation instead of exposing an API that always returns `nullptr` | Documentation and implementation agree, and generic debugging code cannot misuse the interface |
 
-## 测试与验证
+## Testing and Validation
 
-| 状态 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
-| [ ] | P1 | tests | 增加嵌套对象、循环引用、连续多次 GC、满堆分配和自赋值回归测试 | 每个已修复核心 bug 都有最小可复现测试 |
-| [ ] | P1 | tests | 增加 ASan、UBSan、LeakSanitizer 构建/测试配置 | CI 或本地命令可一键运行 sanitizer 测试 |
-| [ ] | P2 | verify | 当前 `_main()` 中的危险示例没有被调用，补充真正验证 dangling pointer、double free、use-after-free 的测试方式 | 验证用例能明确检测预期信号或 sanitizer 报告，而不是仅检查正常退出 |
-| [ ] | P2 | tests | 避免测试只依赖 `assert`，保证 Release 构建仍然检查结果 | `NDEBUG` 下测试仍能正确失败 |
-| [x] | P2 | tests | 释放测试中动态分配的 pointer table，或改为静态常量表 | LeakSanitizer 不报告测试辅助内存泄漏 |
+| [ ] | P1 | tests | Add regression tests for nested objects, cycles, repeated collections, full-heap allocation, and self-assignment | Every fixed core bug has a minimal reproducing test |
+| [ ] | P1 | tests | Add ASan, UBSan, and LeakSanitizer build/test configurations | CI or a local command can run sanitizer tests in one step |
+| [ ] | P2 | verify | Replace dangerous examples hidden in unused `_main()` functions with tests that actually detect dangling pointers, double frees, and use-after-free | Verification cases detect the expected signal or sanitizer report instead of checking only for normal exit |
+| [ ] | P2 | tests | Avoid relying only on `assert` so Release builds still check results | Tests fail correctly when `NDEBUG` is defined |
+| [x] | P2 | tests | Free dynamically allocated pointer tables in tests or replace them with static constant tables | LeakSanitizer reports no leaks from test helper memory |
 
-## 构建与代码质量
+## Build and Code Quality
 
-| 状态 | 优先级 | 模块 | TODO | 完成标准 |
+| Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
-| [x] | P2 | CMake | 用 `target_include_directories()`、`target_link_libraries(... PRIVATE ...)` 替代全局 `include_directories()` | 目标依赖边界清晰，目录间不相互污染 |
-| [ ] | P2 | CMake | 增加 `BUILD_TESTING` 选项，并区分普通单元测试和故意触发错误的 verify 用例 | 默认构建可控，负向测试不会伪装成普通通过测试 |
-| [ ] | P2 | gc.h / CMake | 不要在公共头文件中无条件定义 `GC_DEBUG` | Debug API 是否启用由构建配置决定 |
-| [ ] | P2 | gc.h | 补充失败行为、线程安全和生命周期文档 | C 编译器可严格检查调用；API 契约完整 |
-| [ ] | P2 | all | 统一 clang-format 风格和中英文注释规范 | 格式检查可自动执行 |
+| [x] | P2 | CMake | Replace global `include_directories()` with `target_include_directories()` and `target_link_libraries(... PRIVATE ...)` | Target dependency boundaries are explicit and directories do not pollute one another |
+| [ ] | P2 | CMake | Add a `BUILD_TESTING` option and separate ordinary unit tests from verify cases that intentionally trigger errors | Default builds are controllable and negative tests do not masquerade as ordinary passing tests |
+| [ ] | P2 | gc.h / CMake | Stop defining `GC_DEBUG` unconditionally in the public header | Build configuration determines whether the debug API is enabled |
+| [ ] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
+| [ ] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | Formatting and language checks can run automatically |
 
-## 当前验证基线
+## Current Validation Baseline
 
-- [x] 普通 Clang 构建通过
-- [x] 当前 CTest：84/84 通过
-- [ ] ASan/UBSan 全量测试通过
-- [x] 连续 GC 的嵌套对象测试通过
-- [ ] Release（`NDEBUG`）测试通过
+- [x] Standard Clang build passes
+- [x] Current CTest result: 84/84 passing
+- [ ] Full ASan/UBSan test suite passes
+- [x] Repeated-GC nested-object tests pass
+- [ ] Release (`NDEBUG`) tests pass
 
-## 迭代中确认的已知问题
+## Confirmed Issues Discovered During Iteration
 
-- [ ] **root frame 获取方式会触发严格警告**：Clang 在 `-Wall -Wextra -Wpedantic -Werror` 下会以 `-Wframe-address` 拒绝 `__builtin_frame_address(1)`；当前严格构建只能暂时使用 `-Wno-error=frame-address`，应与 root 生命周期重设计一起解决。
-- [ ] **sanitizer 全量验证仍受 debug API 阻塞**：阶段 3 已用 ASan/UBSan/LeakSanitizer 验证 34 项安全测试；完整 CTest 仍需先修复 `gc_mem_layout()` 的 `new[]`/`free()` 分配释放不匹配，再纳入所有测试。
-- [ ] **cleanup 后的指针失效契约需要文档化**：`gc_cleanup()` 会释放包括仍存活对象在内的 GC 内存，调用方持有的 GC 指针随后均不可访问；应在 C API 文档中明确这一生命周期边界。
+- [ ] **Root-frame lookup triggers strict warnings**: Clang rejects `__builtin_frame_address(1)` with `-Wframe-address` under `-Wall -Wextra -Wpedantic -Werror`. The strict build currently requires the temporary `-Wno-error=frame-address` workaround; resolve this as part of the root-lifetime redesign.
+- [ ] **Full sanitizer validation remains blocked by the debug API**: Phase 3 validated 34 safety tests with ASan, UBSan, and LeakSanitizer. Full CTest coverage still requires fixing the `new[]`/`free()` allocation mismatch in `gc_mem_layout()`.
+- [ ] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; document this lifecycle boundary in the C API.

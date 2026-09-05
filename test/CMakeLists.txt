@@ -1,5 +1,4 @@
-# 添加测试目录
-# 测试名称列表
+# Test names.
 set(TEST_NAMES
     basic
     func_call
@@ -10,7 +9,7 @@ set(TEST_NAMES
     assignment
 )
 
-# 垃圾回收算法列表
+# Garbage-collection algorithms.
 set(GC_ALGORITHMS
     mark_sweep
     copying
@@ -41,7 +40,7 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     endif()
 endforeach()
 
-# 为每个算法创建测试
+# Create tests for each algorithm.
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     foreach(TEST_NAME ${TEST_NAMES})
         set(TEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${GC_ALGORITHM}/${TEST_NAME}.c)

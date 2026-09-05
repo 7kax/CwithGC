@@ -19,11 +19,11 @@ void foo() {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
-    // 函数结束时，gc_pop会被调用，释放所有局部变量
+    // Release all local variables before returning from the function.
     gc_pop();
 
-    // 在引用计数中，当引用被释放时内存会立即回收
-    // 所以此时D、E、F已经被回收
+    // Reference counting reclaims memory immediately when references are released,
+    // so D, E, and F have already been reclaimed.
 }
 
 int main() {
@@ -49,18 +49,18 @@ int main() {
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 3);
 
-    // 初始块数为0
+    // The initial reclaimed-block count is zero.
     size_t initial_blocks = gc_block_collected();
 
     foo(); // block D, E, F allocated and freed here
 
-    // 应该有3个块被回收（D、E、F）
+    // Three blocks (D, E, and F) should have been reclaimed.
     assert(gc_block_collected() == initial_blocks + 3);
 
-    // 根变量仍然是3（A、B、C仍然被引用）
+    // Three roots remain because A, B, and C are still referenced.
     assert(gc_root_size() == 3);
 
-    // 释放主函数中的局部变量
+    // Release the local variables in main.
     gc_ptr_copy(&ptr, NULL);
     assert(gc_block_collected() == initial_blocks + 4); // +A
 
@@ -70,10 +70,10 @@ int main() {
     gc_ptr_copy(&ptr3, NULL);
     assert(gc_block_collected() == initial_blocks + 6); // +C
 
-    assert(gc_free_size() == heap_size); // 所有内存都应该被回收
-    assert(gc_root_size() == 3);         // 根变量数量不变
+    assert(gc_free_size() == heap_size); // All memory should be reclaimed.
+    assert(gc_root_size() == 3);         // The number of roots is unchanged.
 
-    gc_pop(); // 清理main中的根变量
+    gc_pop(); // Remove the roots created in main.
     assert(gc_root_size() == 0);
 
     gc_cleanup();

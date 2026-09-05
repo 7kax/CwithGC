@@ -9,7 +9,7 @@ struct tree_node {
     struct tree_node *right;
 };
 
-// 不安全版本
+// Unsafe version.
 void _func() {
     struct tree_node *root;
     root = malloc(sizeof(struct tree_node) * 10);
@@ -55,19 +55,19 @@ void func() {
     gc_local_var(&root);
 
     gc_ptr_copy(&root, gc_malloc(sizeof(struct tree_node) * 10));
-    // root 指向一个结构体数组
+    // root points to an array of structures.
     gc_register(root, ptr_map_array);
     assert(root != NULL);
 
     for (int i = 0; i < 10; i++) {
         root[i].data = i;
         gc_ptr_copy(&root[i].left, gc_malloc(sizeof(struct tree_node)));
-        // root[i].left 指向一个结构体
+        // root[i].left points to a structure.
         gc_register(root[i].left, ptr_map);
         assert(root[i].left != NULL);
         root[i].left->data = i + 1;
         gc_ptr_copy(&root[i].right, gc_malloc(sizeof(struct tree_node)));
-        // root[i].right 指向一个结构体
+        // root[i].right points to a structure.
         gc_register(root[i].right, ptr_map);
         assert(root[i].right != NULL);
         root[i].right->data = i + 2;
@@ -83,14 +83,14 @@ int main() {
 
     func();
 
-    // 触发垃圾回收
+    // Trigger garbage collection.
     gc_collect();
 
-    // 计算内存泄漏的大小
+    // Calculate the leaked size.
     int curr_free_size = gc_free_size();
     int leak_size = prev_free_size - curr_free_size;
 
-    // 断言内存泄漏的大小为0
+    // Assert that no memory was leaked.
     assert(leak_size == 0);
 
     gc_cleanup();

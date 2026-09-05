@@ -9,7 +9,7 @@ struct tree_node {
     struct tree_node *right;
 };
 
-// 不安全版本
+// Unsafe version.
 void _func() {
     struct tree_node *root;
     root = malloc(sizeof(struct tree_node));
@@ -54,7 +54,7 @@ void func() {
     assert(root->right != NULL);
     root->right->data = 3;
 
-    // 这里没有释放 root 以及 root->left 和 root->right
+    // root, root->left, and root->right are not freed here.
 
     gc_pop();
 };
@@ -66,14 +66,14 @@ int main() {
 
     func();
 
-    // 触发垃圾回收
+    // Trigger garbage collection.
     gc_collect();
 
-    // 计算内存泄漏的大小
+    // Calculate the leaked size.
     int curr_free_size = gc_free_size();
     int leak_size = prev_free_size - curr_free_size;
 
-    // 断言内存泄漏的大小为0
+    // Assert that no memory was leaked.
     assert(leak_size == 0);
 
     gc_cleanup();

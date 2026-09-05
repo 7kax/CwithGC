@@ -5,17 +5,17 @@
 int _main() {
     int *ptr;
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     ptr = malloc(sizeof(int) * 10);
 
-    // 另一个指针指向同一块内存
+    // Point another pointer at the same memory.
     int *ptr2 = ptr;
 
-    // 释放 ptr
+    // Free ptr.
     free(ptr);
 
-    // 使用 ptr2 访问内存
-    // 这里我们尝试访问已经释放的内存，这应该会导致未定义行为
+    // Access the memory through ptr2.
+    // Accessing freed memory here should cause undefined behavior.
     *ptr2 = 42;
 
     return 0;
@@ -27,19 +27,19 @@ int main() {
     int *ptr;
     gc_local_var(&ptr);
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     gc_ptr_copy(&ptr, gc_malloc(sizeof(int) * 10));
 
     int *ptr2;
     gc_local_var(&ptr2);
 
-    // 另一个指针指向同一块内存
+    // Point another pointer at the same memory.
     gc_ptr_copy(&ptr2, ptr);
 
-    // 无需手动释放内存，gc会自动处理
+    // No manual free is needed because the GC handles reclamation.
 
-    // 使用 ptr2，此时安全
-    *ptr2 = 42; // 使用 ptr2
+    // ptr2 is safe to use here.
+    *ptr2 = 42; // Use ptr2.
 
     gc_pop();
     gc_cleanup();

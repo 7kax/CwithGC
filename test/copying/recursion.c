@@ -40,7 +40,7 @@ int main() {
     gc_local_var(&ptr);
     gc_ptr_copy(&ptr, gc_malloc(sizeof(struct foo)));
     gc_register(ptr, ptr_table);
-    assert(ptr->a == 0); // 整个结构体都被初始化为0
+    assert(ptr->a == 0); // The entire structure is zero-initialized.
     assert(ptr->b == NULL);
     assert(ptr->c == NULL);
     assert(ptr->d == NULL);
@@ -65,20 +65,20 @@ int main() {
     *ptr->c = 43;
     *ptr->d = 44;
 
-    // 触发垃圾收集
+    // Trigger garbage collection.
     gc_collect();
-    assert(gc_block_collected() == 4); // 1个结构体 + 3个整数
+    assert(gc_block_collected() == 4); // One structure and three integers.
 
-    // 地址应该发生变化
+    // The address should change.
     assert(ptr != pre_ptr);
 
-    // 值应该保持不变
+    // The values should remain unchanged.
     assert(ptr->a == 666);
     assert(*ptr->b == 42);
     assert(*ptr->c == 43);
     assert(*ptr->d == 44);
 
-    // 将根对象设为NULL并收集
+    // Clear the root object and collect.
     gc_ptr_copy((void **)&ptr, NULL);
     gc_collect();
     assert(gc_free_size() == gc_heap_size());

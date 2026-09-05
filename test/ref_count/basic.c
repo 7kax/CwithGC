@@ -10,7 +10,7 @@ int main() {
 
     gc_init();
 
-    // 分配3个内存块
+    // Allocate three memory blocks.
     int *ptr1, *ptr2, *ptr3;
     gc_local_var(&ptr1);
     gc_local_var(&ptr2);
@@ -35,44 +35,44 @@ int main() {
     assert(*ptr2 == 43);
     assert(*ptr3 == 44);
 
-    // 查看内存使用情况
+    // Check memory usage.
     assert(gc_free_size() == heap_size - 3 * int_block_size);
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 3);
 
-    // 将ptr1设为NULL，应该触发垃圾回收
+    // Clear ptr1, which should trigger reclamation.
     gc_ptr_copy(&ptr1, NULL);
     assert(gc_block_collected() == 1);
     assert(gc_free_size() == heap_size - 2 * int_block_size);
 
-    // 检查其余值是否完好
+    // Verify that the remaining values are intact.
     assert(*ptr2 == 43);
     assert(*ptr3 == 44);
     assert(ptr1 == NULL);
 
-    // 测试引用共享
+    // Test shared references.
     int *ptr4;
     gc_local_var(&ptr4);
-    gc_ptr_copy(&ptr4, ptr2); // ptr4和ptr2共享同一对象
+    gc_ptr_copy(&ptr4, ptr2); // ptr4 and ptr2 share the same object.
 
     assert(*ptr4 == 43);
     assert(ptr2 == ptr4);
 
-    // 引用计数现在应该是2
-    // 释放一个引用，对象不应被回收
+    // The reference count should now be two.
+    // Releasing one reference must not reclaim the object.
     gc_ptr_copy(&ptr2, NULL);
-    assert(gc_block_collected() == 1); // 仍然是1
+    assert(gc_block_collected() == 1); // Still one.
     assert(*ptr4 == 43);
 
-    // 释放最后一个引用，对象应被回收
+    // Release the final reference; the object should be reclaimed.
     gc_ptr_copy(&ptr4, NULL);
     assert(gc_block_collected() == 2);
 
-    // 释放最后一个对象
+    // Release the final object.
     gc_ptr_copy(&ptr3, NULL);
     assert(gc_block_collected() == 3);
 
-    // 所有内存都应该被回收
+    // All memory should have been reclaimed.
     assert(gc_free_size() == heap_size);
 
     gc_pop();

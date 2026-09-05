@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// 不安全版本
+// Unsafe version.
 void _func() {
     int *ptr;
     ptr = malloc(sizeof(int) * 10);
@@ -31,14 +31,14 @@ int main() {
 
     func();
 
-    // 触发垃圾回收
+    // Trigger garbage collection.
     gc_collect();
 
-    // 计算内存泄漏的大小
+    // Calculate the leaked size.
     int curr_free_size = gc_free_size();
     int leak_size = prev_free_size - curr_free_size;
 
-    // 断言内存泄漏的大小为0
+    // Assert that no memory was leaked.
     assert(leak_size == 0);
 
     gc_pop();

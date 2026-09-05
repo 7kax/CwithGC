@@ -9,22 +9,22 @@ struct foo {
     int *b;
 };
 
-// 不安全版本
+// Unsafe version.
 int _main() {
-    // 局部指针变量（模拟未初始化的状态）
+    // Local pointer variables that simulate uninitialized state.
     int *ptr1 = (int *)(uintptr_t)0xff;
     int *ptr2 = (int *)(uintptr_t)0xff;
     int *ptr3 = (int *)(uintptr_t)0xff;
 
-    assert(ptr1 == NULL); // 断言失败
-    assert(ptr2 == NULL); // 断言失败
-    assert(ptr3 == NULL); // 断言失败
+    assert(ptr1 == NULL); // Assertion fails.
+    assert(ptr2 == NULL); // Assertion fails.
+    assert(ptr3 == NULL); // Assertion fails.
 
-    // 局部结构体的指针成员（模拟未初始化的状态）
+    // Pointer fields in a local structure that simulate uninitialized state.
     struct foo f = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
 
-    assert(f.a == NULL); // 断言失败
-    assert(f.b == NULL); // 断言失败
+    assert(f.a == NULL); // Assertion fails.
+    assert(f.b == NULL); // Assertion fails.
 
     return 0;
 }
@@ -32,7 +32,7 @@ int _main() {
 int main() {
     gc_init();
 
-    // 局部指针变量（模拟未初始化的状态）
+    // Local pointer variables that simulate uninitialized state.
     int *ptr1 = (int *)(uintptr_t)0xff;
     int *ptr2 = (int *)(uintptr_t)0xff;
     int *ptr3 = (int *)(uintptr_t)0xff;
@@ -44,7 +44,7 @@ int main() {
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
 
-    // 局部结构体的指针成员（模拟未初始化的状态）
+    // Pointer fields in a local structure that simulate uninitialized state.
     struct foo f = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
     gc_local_var(&f.a);
     gc_local_var(&f.b);

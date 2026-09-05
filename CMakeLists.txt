@@ -7,14 +7,14 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 启用测试
+# Enable testing.
 enable_testing()
 
-# 添加库目录
+# Add the library directory.
 add_subdirectory(src)
 
-# 添加测试目录
+# Add the test directory.
 add_subdirectory(test)
 
-# 添加验证目录
+# Add the verification directory.
 add_subdirectory(verify)

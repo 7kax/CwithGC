@@ -5,15 +5,15 @@
 int _main() {
     int *ptr;
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     ptr = malloc(sizeof(int) * 10);
 
-    // 释放内存
+    // Free the memory.
     free(ptr);
 
-    // 使用 dangling pointer
-    // 这里我们尝试访问已经释放的内存，这应该会导致未定义行为
-    *ptr = 42; // 使用 dangling pointer
+    // Use a dangling pointer.
+    // Accessing freed memory here should cause undefined behavior.
+    *ptr = 42; // Use the dangling pointer.
 
     return 0;
 }
@@ -24,13 +24,13 @@ int main() {
     int *ptr;
     gc_local_var(&ptr);
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     gc_ptr_copy(&ptr, gc_malloc(sizeof(int) * 10));
 
-    // 不需要手动释放内存，gc会自动处理
+    // No manual free is needed because the GC handles reclamation.
 
-    // 使用 ptr，此时 ptr 必定不是 dangling pointer
-    *ptr = 42; // 使用 ptr
+    // ptr remains valid here.
+    *ptr = 42; // Use ptr.
 
     gc_pop();
     gc_cleanup();

@@ -47,7 +47,7 @@ int main() {
     gc_ptr_copy(&head, make_node(elements[0]));
     gc_ptr_copy(&cur, head);
 
-    // 创建一个链表
+    // Build a linked list.
     for (int i = 1; i < n; i++) {
         gc_ptr_copy(&new_node, make_node(elements[i]));
         gc_ptr_copy(&(cur->next), new_node);
@@ -87,7 +87,7 @@ int main() {
     assert(cur == NULL);
     assert(new_node == NULL);
 
-    // 此时所有节点应该都被回收
+    // Every node should now be reclaimed.
     gc_collect();
     assert(gc_free_size() == gc_heap_size());
 

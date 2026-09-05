@@ -5,13 +5,13 @@
 int _main() {
     int *ptr;
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     ptr = malloc(sizeof(int) * 10);
 
-    // 释放内存
+    // Free the memory.
     free(ptr);
 
-    // 再次释放内存
+    // Free the memory again.
     free(ptr);
 
     return 0;
@@ -23,10 +23,10 @@ int main() {
     int *ptr;
     gc_local_var(&ptr);
 
-    // 申请内存，此时正常工作
+    // Allocate memory normally.
     gc_ptr_copy(&ptr, gc_malloc(sizeof(int) * 10));
 
-    // 无需手动释放内存，gc会自动处理
+    // No manual free is needed because the GC handles reclamation.
 
     gc_pop();
     gc_cleanup();

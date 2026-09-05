@@ -54,7 +54,7 @@ int main() {
     assert(gc_root_size() == 1);
     assert(gc_block_collected() == 0);
 
-    // 分配并设置递归引用
+    // Allocate and initialize nested references.
     gc_ptr_copy(&ptr->b, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->c, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->d, gc_malloc(sizeof(int)));
@@ -66,25 +66,25 @@ int main() {
     *ptr->c = 43;
     *ptr->d = 44;
 
-    // 检查值是否正确设置
+    // Verify that the values were initialized correctly.
     assert(ptr->a == 666);
     assert(*ptr->b == 42);
     assert(*ptr->c == 43);
     assert(*ptr->d == 44);
 
-    // 清除引用，这应该触发内存回收
+    // Clear the references, which should trigger reclamation.
     gc_ptr_copy(&ptr->b, NULL);
     gc_ptr_copy(&ptr->c, NULL);
     gc_ptr_copy(&ptr->d, NULL);
 
-    // 引用计数垃圾收集是即时的，所以当引用被清除时应该已经回收了
-    assert(gc_block_collected() == 3); // 3个整数对象
+    // Reference counting is immediate, so clearing the references should reclaim them.
+    assert(gc_block_collected() == 3); // Three integer objects.
 
-    // 将根对象设为NULL并进行垃圾收集
+    // Clear the root object and reclaim it.
     gc_ptr_copy(&ptr, NULL);
-    assert(gc_block_collected() == 4); // 3个整数对象 + 1个结构体
+    assert(gc_block_collected() == 4); // Three integer objects and one structure.
 
-    // 内存应该全部被回收
+    // All memory should have been reclaimed.
     assert(gc_free_size() == gc_heap_size());
 
     gc_pop();
