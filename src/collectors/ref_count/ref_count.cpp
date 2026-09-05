@@ -6,9 +6,9 @@
 
 #include <cassert>
 #include <cstddef>
-#include <cstdlib>
 #include <cstring>
-#include <unordered_set>
+#include <unordered_map>
+#include <utility>
 
 namespace {
 
@@ -22,10 +22,8 @@ struct meta_data {
 
 class RefCountState {
   public:
-    ~RefCountState() { release_allocations(); }
-
     void init() noexcept {
-        release_allocations();
+        allocations_.clear();
         roots_.clear();
         free_size_ = heap_size;
         block_collected_ = 0;
@@ -48,9 +46,9 @@ class RefCountState {
         void *payload = gc_layout::payload(block.get());
         std::memset(payload, 0, size);
 
-        allocations_.insert(block.get());
+        meta_data *meta_ptr = block.get();
+        allocations_.emplace(meta_ptr, std::move(block));
         free_size_ -= alloc_size;
-        block.release();
         return payload;
     }
 
@@ -105,7 +103,7 @@ class RefCountState {
     }
 
     void cleanup() noexcept {
-        release_allocations();
+        allocations_.clear();
         roots_.clear();
         free_size_ = 0;
         block_collected_ = 0;
@@ -147,26 +145,19 @@ class RefCountState {
                                              });
         }
 
+        const auto allocation = allocations_.find(meta_ptr);
+        assert(allocation != allocations_.end());
+
         const size_t released_size = meta_ptr->size;
-        const size_t erased = allocations_.erase(meta_ptr);
-        assert(erased == 1);
         free_size_ += released_size;
         block_collected_++;
-        std::free(meta_ptr);
-    }
-
-    void release_allocations() noexcept {
-        for (meta_data *allocation : allocations_)
-            std::free(allocation);
-
-        std::unordered_set<meta_data *> empty;
-        allocations_.swap(empty);
+        allocations_.erase(allocation);
     }
 
     bool initialized_ = false;
     size_t free_size_ = 0;
     gc_runtime::root_set roots_;
-    std::unordered_set<meta_data *> allocations_;
+    std::unordered_map<meta_data *, gc_runtime::malloc_ptr<meta_data>> allocations_;
     size_t block_collected_ = 0;
 };
 
