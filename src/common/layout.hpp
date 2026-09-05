@@ -1,5 +1,5 @@
-#ifndef GC_LAYOUT_H
-#define GC_LAYOUT_H
+#ifndef CWITHGC_COMMON_LAYOUT_HPP
+#define CWITHGC_COMMON_LAYOUT_HPP
 
 #include <cstddef>
 #include <limits>
@@ -55,4 +55,4 @@ template <typename Metadata> Metadata *metadata(void *payload) {
 
 } // namespace gc_layout
 
-#endif // GC_LAYOUT_H
+#endif // CWITHGC_COMMON_LAYOUT_HPP

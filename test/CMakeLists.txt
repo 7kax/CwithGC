@@ -1,6 +1,4 @@
 # 添加测试目录
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 # 测试名称列表
 set(TEST_NAMES
     basic
@@ -23,13 +21,13 @@ set(GC_ALGORITHMS
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(C_SMOKE_TARGET ${GC_ALGORITHM}_c_api_smoke)
     add_executable(${C_SMOKE_TARGET} c_api_smoke.c)
-    target_link_libraries(${C_SMOKE_TARGET} gc_${GC_ALGORITHM})
+    target_link_libraries(${C_SMOKE_TARGET} PRIVATE gc_${GC_ALGORITHM})
     set_target_properties(${C_SMOKE_TARGET} PROPERTIES C_EXTENSIONS OFF)
     add_test(NAME ${C_SMOKE_TARGET} COMMAND ${C_SMOKE_TARGET})
 
     set(CPP_SMOKE_TARGET ${GC_ALGORITHM}_cpp_api_smoke)
     add_executable(${CPP_SMOKE_TARGET} cpp_api_smoke.cpp)
-    target_link_libraries(${CPP_SMOKE_TARGET} gc_${GC_ALGORITHM})
+    target_link_libraries(${CPP_SMOKE_TARGET} PRIVATE gc_${GC_ALGORITHM})
     set_target_properties(${CPP_SMOKE_TARGET} PROPERTIES CXX_EXTENSIONS OFF)
     add_test(NAME ${CPP_SMOKE_TARGET} COMMAND ${CPP_SMOKE_TARGET})
 
@@ -49,7 +47,7 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
         set(TEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${GC_ALGORITHM}/${TEST_NAME}.c)
         if(EXISTS ${TEST_FILE})
             add_executable(${GC_ALGORITHM}_${TEST_NAME} ${GC_ALGORITHM}/${TEST_NAME}.c)
-            target_link_libraries(${GC_ALGORITHM}_${TEST_NAME} gc_${GC_ALGORITHM})
+            target_link_libraries(${GC_ALGORITHM}_${TEST_NAME} PRIVATE gc_${GC_ALGORITHM})
             add_test(NAME ${GC_ALGORITHM}_${TEST_NAME} COMMAND ${GC_ALGORITHM}_${TEST_NAME})
         endif()
     endforeach()
@@ -58,6 +56,6 @@ endforeach()
 # Shared allocation-contract tests run against every collector.
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     add_executable(${GC_ALGORITHM}_alignment alignment.c)
-    target_link_libraries(${GC_ALGORITHM}_alignment gc_${GC_ALGORITHM})
+    target_link_libraries(${GC_ALGORITHM}_alignment PRIVATE gc_${GC_ALGORITHM})
     add_test(NAME ${GC_ALGORITHM}_alignment COMMAND ${GC_ALGORITHM}_alignment)
 endforeach()

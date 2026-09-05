@@ -1,5 +1,5 @@
-#ifndef GC_RUNTIME_H
-#define GC_RUNTIME_H
+#ifndef CWITHGC_COMMON_RUNTIME_HPP
+#define CWITHGC_COMMON_RUNTIME_HPP
 
 #include <cstdio>
 #include <cstdlib>
@@ -25,4 +25,4 @@ namespace gc_runtime {
 
 } // namespace gc_runtime
 
-#endif // GC_RUNTIME_H
+#endif // CWITHGC_COMMON_RUNTIME_HPP

@@ -1,5 +1,5 @@
-#ifndef GC_PTR_TABLE_INTERNAL_H
-#define GC_PTR_TABLE_INTERNAL_H
+#ifndef CWITHGC_COMMON_POINTER_TABLE_HPP
+#define CWITHGC_COMMON_POINTER_TABLE_HPP
 
 #include "gc.h"
 
@@ -12,4 +12,4 @@ struct gc_ptr_table {
     std::vector<std::size_t> positions;
 };
 
-#endif // GC_PTR_TABLE_INTERNAL_H
+#endif // CWITHGC_COMMON_POINTER_TABLE_HPP

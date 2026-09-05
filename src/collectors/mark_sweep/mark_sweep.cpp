@@ -1,6 +1,6 @@
-#include "../gc_layout.h"
-#include "../gc_ptr_table_internal.h"
-#include "../gc_runtime.h"
+#include "common/layout.hpp"
+#include "common/pointer_table.hpp"
+#include "common/runtime.hpp"
 #include "gc.h"
 #include <cassert>
 #include <cstdlib>

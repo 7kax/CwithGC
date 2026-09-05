@@ -1,5 +1,3 @@
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 set(TEST_NAMES
     uninit_ptr
     mem_leak1
@@ -23,14 +21,14 @@ foreach(TEST_NAME ${TEST_NAMES})
         foreach(GC_ALGORITHM ${GC_ALGORITHMS})
             set(EXECUTABLE_NAME ${GC_ALGORITHM}_${TEST_NAME})
             add_executable(${EXECUTABLE_NAME} ${TEST_FILE})
-            target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+            target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
             add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
         endforeach()
     endif()
 endforeach()
 
 add_executable(mark_sweep_full_heap_alloc_fail full_heap_alloc_fail.c)
-target_link_libraries(mark_sweep_full_heap_alloc_fail gc_mark_sweep)
+target_link_libraries(mark_sweep_full_heap_alloc_fail PRIVATE gc_mark_sweep)
 add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
 set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
     PASS_REGULAR_EXPRESSION "Allocation failed"
@@ -39,12 +37,12 @@ set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(EXECUTABLE_NAME ${GC_ALGORITHM}_oversized_alloc)
     add_executable(${EXECUTABLE_NAME} oversized_alloc.c)
-    target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
     add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
 
     set(PTR_TABLE_EXECUTABLE ${GC_ALGORITHM}_overflowing_ptr_table)
     add_executable(${PTR_TABLE_EXECUTABLE} overflowing_ptr_table.c)
-    target_link_libraries(${PTR_TABLE_EXECUTABLE} gc_${GC_ALGORITHM})
+    target_link_libraries(${PTR_TABLE_EXECUTABLE} PRIVATE gc_${GC_ALGORITHM})
     add_test(NAME ${PTR_TABLE_EXECUTABLE} COMMAND ${PTR_TABLE_EXECUTABLE} overflow)
 
     set_tests_properties(${GC_ALGORITHM}_oversized_alloc PROPERTIES
@@ -68,7 +66,7 @@ endforeach()
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(EXECUTABLE_NAME ${GC_ALGORITHM}_cpp_exception_boundary)
     add_executable(${EXECUTABLE_NAME} cpp_exception_boundary.cpp)
-    target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
     add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME} root)
     set_tests_properties(${EXECUTABLE_NAME} PROPERTIES
         PASS_REGULAR_EXPRESSION "Allocation failure"

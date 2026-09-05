@@ -1,7 +1,7 @@
-#include "gc_ptr_table_internal.h"
+#include "common/pointer_table.hpp"
 
-#include "gc_layout.h"
-#include "gc_runtime.h"
+#include "common/layout.hpp"
+#include "common/runtime.hpp"
 
 #include <cstddef>
 #include <limits>

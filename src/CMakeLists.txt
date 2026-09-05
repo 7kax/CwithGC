@@ -1,0 +1,27 @@
+add_library(gc_common OBJECT
+    common/pointer_table.cpp
+)
+
+target_include_directories(gc_common
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+function(add_gc_collector TARGET SOURCE)
+    add_library(${TARGET} STATIC
+        ${SOURCE}
+        $<TARGET_OBJECTS:gc_common>
+    )
+
+    target_include_directories(${TARGET}
+        PUBLIC
+            ${PROJECT_SOURCE_DIR}/include
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endfunction()
+
+add_gc_collector(gc_mark_sweep collectors/mark_sweep/mark_sweep.cpp)
+add_gc_collector(gc_copying collectors/copying/copying.cpp)
+add_gc_collector(gc_ref_count collectors/ref_count/ref_count.cpp)

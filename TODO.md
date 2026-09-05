@@ -73,7 +73,7 @@
 
 | 状态 | 优先级 | 模块 | TODO | 完成标准 |
 | --- | --- | --- | --- | --- |
-| [ ] | P2 | CMake | 用 `target_include_directories()`、`target_link_libraries(... PRIVATE ...)` 替代全局 `include_directories()` | 目标依赖边界清晰，目录间不相互污染 |
+| [x] | P2 | CMake | 用 `target_include_directories()`、`target_link_libraries(... PRIVATE ...)` 替代全局 `include_directories()` | 目标依赖边界清晰，目录间不相互污染 |
 | [ ] | P2 | CMake | 增加 `BUILD_TESTING` 选项，并区分普通单元测试和故意触发错误的 verify 用例 | 默认构建可控，负向测试不会伪装成普通通过测试 |
 | [ ] | P2 | gc.h / CMake | 不要在公共头文件中无条件定义 `GC_DEBUG` | Debug API 是否启用由构建配置决定 |
 | [ ] | P2 | gc.h | 补充失败行为、线程安全和生命周期文档 | C 编译器可严格检查调用；API 契约完整 |
