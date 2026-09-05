@@ -37,17 +37,46 @@ set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
 )
 
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
-    foreach(TEST_NAME oversized_alloc overflowing_ptr_table)
-        set(EXECUTABLE_NAME ${GC_ALGORITHM}_${TEST_NAME})
-        add_executable(${EXECUTABLE_NAME} ${TEST_NAME}.c)
-        target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
-        add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
-    endforeach()
+    set(EXECUTABLE_NAME ${GC_ALGORITHM}_oversized_alloc)
+    add_executable(${EXECUTABLE_NAME} oversized_alloc.c)
+    target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+    add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
+
+    set(PTR_TABLE_EXECUTABLE ${GC_ALGORITHM}_overflowing_ptr_table)
+    add_executable(${PTR_TABLE_EXECUTABLE} overflowing_ptr_table.c)
+    target_link_libraries(${PTR_TABLE_EXECUTABLE} gc_${GC_ALGORITHM})
+    add_test(NAME ${PTR_TABLE_EXECUTABLE} COMMAND ${PTR_TABLE_EXECUTABLE} overflow)
 
     set_tests_properties(${GC_ALGORITHM}_oversized_alloc PROPERTIES
         PASS_REGULAR_EXPRESSION "Allocation fail"
     )
     set_tests_properties(${GC_ALGORITHM}_overflowing_ptr_table PROPERTIES
         PASS_REGULAR_EXPRESSION "Invalid pointer table"
+    )
+
+    foreach(PTR_TABLE_CASE zero-array bad-offset bad-stride large-payload)
+        string(REPLACE "-" "_" PTR_TABLE_TEST_SUFFIX ${PTR_TABLE_CASE})
+        set(PTR_TABLE_TEST_NAME ${GC_ALGORITHM}_ptr_table_${PTR_TABLE_TEST_SUFFIX})
+        add_test(NAME ${PTR_TABLE_TEST_NAME}
+                 COMMAND ${GC_ALGORITHM}_overflowing_ptr_table ${PTR_TABLE_CASE})
+        set_tests_properties(${PTR_TABLE_TEST_NAME} PROPERTIES
+            PASS_REGULAR_EXPRESSION "Invalid pointer table"
+        )
+    endforeach()
+endforeach()
+
+foreach(GC_ALGORITHM ${GC_ALGORITHMS})
+    set(EXECUTABLE_NAME ${GC_ALGORITHM}_cpp_exception_boundary)
+    add_executable(${EXECUTABLE_NAME} cpp_exception_boundary.cpp)
+    target_link_libraries(${EXECUTABLE_NAME} gc_${GC_ALGORITHM})
+    add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME} root)
+    set_tests_properties(${EXECUTABLE_NAME} PROPERTIES
+        PASS_REGULAR_EXPRESSION "Allocation failure"
+    )
+
+    set(PTR_TABLE_EXCEPTION_TEST ${GC_ALGORITHM}_ptr_table_exception_boundary)
+    add_test(NAME ${PTR_TABLE_EXCEPTION_TEST} COMMAND ${EXECUTABLE_NAME} pointer-table)
+    set_tests_properties(${PTR_TABLE_EXCEPTION_TEST} PROPERTIES
+        PASS_REGULAR_EXPRESSION "Allocation failure"
     )
 endforeach()

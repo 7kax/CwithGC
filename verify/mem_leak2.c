@@ -26,17 +26,13 @@ int _main() {
 }
 
 gc_ptr_table *ptr_map = NULL;
-void construct_ptr_table() {
-    size_t table_size;
-    if (!gc_ptr_table_size(2, &table_size))
-        abort();
-    ptr_map = malloc(table_size);
+void construct_ptr_table(void) {
+    const size_t positions[] = {
+        offsetof(struct tree_node, left),
+        offsetof(struct tree_node, right),
+    };
+    ptr_map = gc_ptr_table_create(1, sizeof(struct tree_node), 2, positions);
     assert(ptr_map != NULL);
-    ptr_map->array_len = 1;
-    ptr_map->struct_size = sizeof(struct tree_node);
-    ptr_map->num_pointers = 2;
-    ptr_map->positions[0] = offsetof(struct tree_node, left);
-    ptr_map->positions[1] = offsetof(struct tree_node, right);
 };
 void func() {
     construct_ptr_table();
@@ -80,9 +76,8 @@ int main() {
     // 断言内存泄漏的大小为0
     assert(leak_size == 0);
 
-    gc_pop();
-
     gc_cleanup();
+    gc_ptr_table_destroy(ptr_map);
 
     return 0;
 }

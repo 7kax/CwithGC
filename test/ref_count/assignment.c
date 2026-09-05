@@ -11,16 +11,9 @@ struct holder {
 };
 
 static gc_ptr_table *construct_ptr_table(void) {
-    size_t table_size;
-    if (!gc_ptr_table_size(1, &table_size))
-        abort();
-    gc_ptr_table *table = malloc(table_size);
+    const size_t positions[] = {offsetof(struct holder, child)};
+    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct holder), 1, positions);
     assert(table != NULL);
-
-    table->array_len = 1;
-    table->struct_size = sizeof(struct holder);
-    table->num_pointers = 1;
-    table->positions[0] = offsetof(struct holder, child);
     return table;
 }
 
@@ -109,7 +102,7 @@ int main(void) {
     assert(gc_root_size() == 0);
 
     gc_cleanup();
-    free(table);
+    gc_ptr_table_destroy(table);
 
     puts("Reference counting assignment test passed!");
     return 0;

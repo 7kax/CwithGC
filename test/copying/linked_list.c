@@ -9,17 +9,10 @@ struct node {
     struct node *next;
 };
 
-gc_ptr_table *construct_ptr_table() {
-    size_t table_size;
-    if (!gc_ptr_table_size(1, &table_size))
-        abort();
-    gc_ptr_table *table = malloc(table_size);
+gc_ptr_table *construct_ptr_table(void) {
+    const size_t positions[] = {offsetof(struct node, next)};
+    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, positions);
     assert(table != NULL);
-
-    table->array_len = 1;
-    table->struct_size = sizeof(struct node);
-    table->num_pointers = 1;
-    table->positions[0] = offsetof(struct node, next);
     return table;
 }
 
@@ -100,7 +93,7 @@ int main() {
 
     gc_pop();
     gc_cleanup();
-    free(ptr_map);
+    gc_ptr_table_destroy(ptr_map);
     puts("Copying linked list test passed!");
 
     return 0;

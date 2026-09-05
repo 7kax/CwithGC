@@ -18,23 +18,14 @@ struct foo {
 
 gc_ptr_table *ptr_table = NULL;
 
-gc_ptr_table *construct_ptr_table() {
-    size_t table_size;
-    if (!gc_ptr_table_size(7, &table_size))
-        abort();
-    gc_ptr_table *table = malloc(table_size);
+gc_ptr_table *construct_ptr_table(void) {
+    const size_t positions[] = {
+        offsetof(struct foo, b), offsetof(struct foo, c), offsetof(struct foo, d),
+        offsetof(struct foo, e), offsetof(struct foo, f), offsetof(struct foo, g),
+        offsetof(struct foo, h),
+    };
+    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct foo), 7, positions);
     assert(table != NULL);
-
-    table->array_len = 1;
-    table->struct_size = sizeof(struct foo);
-    table->num_pointers = 7;
-    table->positions[0] = offsetof(struct foo, b);
-    table->positions[1] = offsetof(struct foo, c);
-    table->positions[2] = offsetof(struct foo, d);
-    table->positions[3] = offsetof(struct foo, e);
-    table->positions[4] = offsetof(struct foo, f);
-    table->positions[5] = offsetof(struct foo, g);
-    table->positions[6] = offsetof(struct foo, h);
     return table;
 }
 
@@ -77,6 +68,7 @@ int main() {
     gc_pop();
 
     gc_cleanup();
+    gc_ptr_table_destroy(ptr_table);
 
     puts("Mark-sweep recursion test passed!");
 

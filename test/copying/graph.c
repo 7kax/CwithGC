@@ -11,17 +11,12 @@ struct node {
 };
 
 static gc_ptr_table *construct_ptr_table(void) {
-    size_t table_size;
-    if (!gc_ptr_table_size(2, &table_size))
-        abort();
-    gc_ptr_table *table = malloc(table_size);
+    const size_t positions[] = {
+        offsetof(struct node, left),
+        offsetof(struct node, right),
+    };
+    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 2, positions);
     assert(table != NULL);
-
-    table->array_len = 1;
-    table->struct_size = sizeof(struct node);
-    table->num_pointers = 2;
-    table->positions[0] = offsetof(struct node, left);
-    table->positions[1] = offsetof(struct node, right);
     return table;
 }
 
@@ -89,7 +84,7 @@ int main(void) {
 
     gc_pop();
     gc_cleanup();
-    free(ptr_table);
+    gc_ptr_table_destroy(ptr_table);
 
     puts("Copying graph test passed!");
     return 0;

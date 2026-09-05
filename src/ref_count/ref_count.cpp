@@ -1,9 +1,10 @@
 #include "../gc_layout.h"
+#include "../gc_ptr_table_internal.h"
+#include "../gc_runtime.h"
 #include "gc.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <vector>
 
 const size_t heap_size = 4 * 1024; // 堆大小 4KB
@@ -19,9 +20,9 @@ size_t free_size; // 可用内存大小
 
 // 元数据结构体
 struct meta_data {
-    gc_ptr_table *ptr_table; // 指向指针表的指针
-    size_t ref_count;        // 引用计数
-    size_t size;             // 块大小
+    const gc_ptr_table *ptr_table; // 指向指针表的指针
+    size_t ref_count;              // 引用计数
+    size_t size;                   // 块大小
 };
 
 #ifdef GC_DEBUG
@@ -33,8 +34,7 @@ static meta_data *get_meta_data(void *ptr) {
 }
 
 [[noreturn]] static void invalid_pointer_table() {
-    std::cerr << "Invalid pointer table" << std::endl;
-    std::abort();
+    gc_runtime::fatal("Invalid pointer table");
 }
 
 // 增加引用计数
@@ -60,7 +60,7 @@ static void decrement_ref_count(void *ptr) {
         if (meta_ptr->ptr_table != nullptr) {
             u_int64_t cur_struct = (u_int64_t)ptr;
             for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-                for (size_t j = 0; j < meta_ptr->ptr_table->num_pointers; j++) {
+                for (size_t j = 0; j < meta_ptr->ptr_table->positions.size(); j++) {
                     void **child_ptr = (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
                     if (*child_ptr != nullptr) {
                         decrement_ref_count(*child_ptr);
@@ -83,15 +83,17 @@ static void decrement_ref_count(void *ptr) {
 }
 
 extern "C" {
-void gc_init() {
+void gc_init(void) noexcept try {
     free_size = heap_size;
 
 #ifdef GC_DEBUG
     block_collected = 0;
 #endif
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void *gc_malloc(size_t size) {
+void *gc_malloc(size_t size) noexcept try {
     size_t alloc_size;
     if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size)
         gc_allocation_failure();
@@ -115,54 +117,62 @@ void *gc_malloc(size_t size) {
     std::memset(payload, 0, size);
 
     return payload;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_local_var(void **ptr) {
+void gc_local_var(void *ptr_address) noexcept try {
+    auto **ptr = static_cast<void **>(ptr_address);
     void *frame_address = __builtin_frame_address(1);
     root.push_back({ptr, frame_address});
 
     // 清除指针
     *ptr = nullptr;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_register(void *ptr, gc_ptr_table *ptr_map) {
+void gc_register(void *ptr, const gc_ptr_table *ptr_map) noexcept try {
     meta_data *meta_ptr = get_meta_data(ptr);
 
     // 只允许注册一次
     assert(meta_ptr->ptr_table == nullptr);
 
     // 保证 ptr_map 合法
-    assert(ptr_map != nullptr);
+    if (ptr_map == nullptr)
+        invalid_pointer_table();
     assert(ptr_map->array_len > 0);
     assert(ptr_map->struct_size > 0);
-    assert(ptr_map->num_pointers > 0);
+    assert(!ptr_map->positions.empty());
 
-    size_t table_size;
     size_t payload_size;
-    if (!gc_ptr_table_size(ptr_map->num_pointers, &table_size) ||
-        !gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size))
+    const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
+    if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
+        payload_size > payload_capacity)
         invalid_pointer_table();
 
     meta_ptr->ptr_table = ptr_map;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_allocation_failure() {
-    std::cerr << "Allocation failure" << std::endl;
-    std::abort();
+void gc_allocation_failure(void) noexcept {
+    gc_runtime::fatal("Allocation failure");
 }
 
-void gc_collect() {
+void gc_collect(void) noexcept {
     // 在引用计数法中，垃圾收集是实时的
     // 当引用计数为0时，对象会被立即回收
     // 此函数保留为空实现，以兼容接口
 }
 
-void gc_cleanup() {
+void gc_cleanup(void) noexcept {
     free_size = 0;
     root.clear();
 }
 
-void gc_ptr_copy(void **dst, void *src) {
+void gc_ptr_copy(void *dst_address, void *src) noexcept {
+    auto **dst = static_cast<void **>(dst_address);
     void *old = *dst;
 
     if (old == src) {
@@ -183,7 +193,7 @@ void gc_ptr_copy(void **dst, void *src) {
     }
 }
 
-void gc_pop() {
+void gc_pop(void) noexcept {
     void *frame_address = root.back().frame;
 
     // 弹出当前栈帧中的所有局部变量，并减少它们指向对象的引用计数
@@ -197,27 +207,27 @@ void gc_pop() {
 }
 
 #ifdef GC_DEBUG
-size_t gc_heap_size() {
+size_t gc_heap_size(void) noexcept {
     return heap_size;
 }
 
-size_t gc_free_size() {
+size_t gc_free_size(void) noexcept {
     return free_size;
 }
 
-size_t gc_block_collected() {
+size_t gc_block_collected(void) noexcept {
     return block_collected;
 }
 
-size_t gc_meta_size() {
+size_t gc_meta_size(void) noexcept {
     return gc_layout::header_size<meta_data>;
 }
 
-size_t gc_root_size() {
+size_t gc_root_size(void) noexcept {
     return root.size();
 }
 
-mem_block_info *gc_mem_layout() {
+mem_block_info *gc_mem_layout(void) noexcept {
     return nullptr;
 }
 #endif

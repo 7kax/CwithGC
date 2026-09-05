@@ -1,10 +1,11 @@
 #include "../gc_layout.h"
+#include "../gc_ptr_table_internal.h"
+#include "../gc_runtime.h"
 #include "gc.h"
 
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <vector>
 
 void *from;                        // Start of the from space
@@ -22,7 +23,7 @@ std::vector<stack_ptr> root;
 
 struct meta_data {
     u_int8_t copied;
-    gc_ptr_table *ptr_table;
+    const gc_ptr_table *ptr_table;
     size_t size;
     void *forwarding;
 };
@@ -38,8 +39,7 @@ static meta_data *get_meta_data(void *ptr) {
 }
 
 [[noreturn]] static void invalid_pointer_table() {
-    std::cerr << "Invalid pointer table" << std::endl;
-    std::abort();
+    gc_runtime::fatal("Invalid pointer table");
 }
 
 static void *evacuate(void *ptr) {
@@ -74,13 +74,13 @@ static void *evacuate(void *ptr) {
 }
 
 static void scan_object(meta_data *meta_ptr) {
-    gc_ptr_table *ptr_table = meta_ptr->ptr_table;
+    const gc_ptr_table *ptr_table = meta_ptr->ptr_table;
     if (ptr_table == nullptr)
         return;
 
     char *cur_struct = static_cast<char *>(gc_layout::payload(meta_ptr));
     for (size_t i = 0; i < ptr_table->array_len; i++) {
-        for (size_t j = 0; j < ptr_table->num_pointers; j++) {
+        for (size_t j = 0; j < ptr_table->positions.size(); j++) {
             void **child_ptr = reinterpret_cast<void **>(cur_struct + ptr_table->positions[j]);
             if (*child_ptr != nullptr)
                 *child_ptr = evacuate(*child_ptr);
@@ -90,7 +90,7 @@ static void scan_object(meta_data *meta_ptr) {
 }
 
 extern "C" {
-void gc_init() {
+void gc_init(void) noexcept try {
     from = std::malloc(heap_size);
     to = std::malloc(heap_size);
     free_space = from;
@@ -99,9 +99,11 @@ void gc_init() {
 #ifdef GC_DEBUG
     block_collected = 0;
 #endif
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void *gc_malloc(size_t size) {
+void *gc_malloc(size_t size) noexcept try {
     size_t alloc_size;
     if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size)
         gc_allocation_failure();
@@ -130,42 +132,51 @@ void *gc_malloc(size_t size) {
     std::memset(payload, 0, size);
 
     return payload;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_local_var(void **ptr) {
+void gc_local_var(void *ptr_address) noexcept try {
+    auto **ptr = static_cast<void **>(ptr_address);
     void *frame_address = __builtin_frame_address(1);
     root.push_back({ptr, frame_address});
 
     *ptr = nullptr; // Clear the pointer
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_register(void *ptr, gc_ptr_table *ptr_map) {
+void gc_register(void *ptr, const gc_ptr_table *ptr_map) noexcept try {
     meta_data *meta_ptr = get_meta_data(ptr);
 
     // 只允许注册一次
     assert(meta_ptr->ptr_table == nullptr);
 
     // 保证 ptr_map 合法
-    assert(ptr_map != nullptr);
+    if (ptr_map == nullptr)
+        invalid_pointer_table();
     assert(ptr_map->array_len > 0);
     assert(ptr_map->struct_size > 0);
-    assert(ptr_map->num_pointers > 0);
+    assert(!ptr_map->positions.empty());
 
-    size_t table_size;
     size_t payload_size;
-    if (!gc_ptr_table_size(ptr_map->num_pointers, &table_size) ||
-        !gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size))
+    const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
+    if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
+        payload_size > payload_capacity)
         invalid_pointer_table();
 
     meta_ptr->ptr_table = ptr_map;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
 // No need to handle this in copying
-void gc_ptr_copy(void **dst, void *src) {
+void gc_ptr_copy(void *dst_address, void *src) noexcept {
+    auto **dst = static_cast<void **>(dst_address);
     *dst = src;
 }
 
-void gc_collect() {
+void gc_collect(void) noexcept try {
     free_space = to;
     char *scan = static_cast<char *>(to);
 
@@ -187,16 +198,18 @@ void gc_collect() {
 
     // Reset free size
     free_size = heap_size - ((char *)free_space - (char *)from);
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 
-void gc_pop() {
+void gc_pop(void) noexcept {
     void *frame_address = root.back().frame;
     while (!root.empty() && root.back().frame == frame_address) {
         root.pop_back();
     }
 }
 
-void gc_cleanup() {
+void gc_cleanup(void) noexcept {
     std::free(from);
     std::free(to);
     from = nullptr;
@@ -206,28 +219,27 @@ void gc_cleanup() {
     root.clear();
 }
 
-void gc_allocation_failure() {
-    std::cerr << "Allocation failure" << std::endl;
-    std::abort();
+void gc_allocation_failure(void) noexcept {
+    gc_runtime::fatal("Allocation failure");
 }
 
 #ifdef GC_DEBUG
-size_t gc_heap_size() {
+size_t gc_heap_size(void) noexcept {
     return heap_size;
 }
-size_t gc_free_size() {
+size_t gc_free_size(void) noexcept {
     return free_size;
 }
-size_t gc_block_collected() {
+size_t gc_block_collected(void) noexcept {
     return block_collected;
 }
-size_t gc_meta_size() {
+size_t gc_meta_size(void) noexcept {
     return gc_layout::header_size<meta_data>;
 }
-size_t gc_root_size() {
+size_t gc_root_size(void) noexcept {
     return root.size();
 }
-mem_block_info *gc_mem_layout() {
+mem_block_info *gc_mem_layout(void) noexcept try {
     std::vector<mem_block_info> mem_layout;
 
     void *current = from;
@@ -247,6 +259,8 @@ mem_block_info *gc_mem_layout() {
     layout[mem_layout.size()] = {nullptr, 0, 0}; // Null-terminate the array
 
     return layout;
+} catch (...) {
+    gc_runtime::handle_current_exception();
 }
 #endif
 }
