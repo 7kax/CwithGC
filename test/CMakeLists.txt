@@ -58,4 +58,8 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     add_executable(${GC_ALGORITHM}_alignment alignment.c)
     target_link_libraries(${GC_ALGORITHM}_alignment PRIVATE gc_${GC_ALGORITHM})
     add_test(NAME ${GC_ALGORITHM}_alignment COMMAND ${GC_ALGORITHM}_alignment)
+
+    add_executable(${GC_ALGORITHM}_lifecycle lifecycle.c)
+    target_link_libraries(${GC_ALGORITHM}_lifecycle PRIVATE gc_${GC_ALGORITHM})
+    add_test(NAME ${GC_ALGORITHM}_lifecycle COMMAND ${GC_ALGORITHM}_lifecycle)
 endforeach()

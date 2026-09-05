@@ -77,4 +77,17 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set_tests_properties(${PTR_TABLE_EXCEPTION_TEST} PROPERTIES
         PASS_REGULAR_EXPRESSION "Allocation failure"
     )
+
+    set(LIFECYCLE_EXECUTABLE ${GC_ALGORITHM}_invalid_lifecycle)
+    add_executable(${LIFECYCLE_EXECUTABLE} invalid_lifecycle.c)
+    target_link_libraries(${LIFECYCLE_EXECUTABLE} PRIVATE gc_${GC_ALGORITHM})
+
+    foreach(LIFECYCLE_CASE malloc collect after-cleanup)
+        string(REPLACE "-" "_" LIFECYCLE_SUFFIX ${LIFECYCLE_CASE})
+        set(LIFECYCLE_TEST ${GC_ALGORITHM}_invalid_lifecycle_${LIFECYCLE_SUFFIX})
+        add_test(NAME ${LIFECYCLE_TEST} COMMAND ${LIFECYCLE_EXECUTABLE} ${LIFECYCLE_CASE})
+        set_tests_properties(${LIFECYCLE_TEST} PROPERTIES
+            PASS_REGULAR_EXPRESSION "GC is not initialized"
+        )
+    endforeach()
 endforeach()

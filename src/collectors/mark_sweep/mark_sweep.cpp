@@ -2,31 +2,32 @@
 #include "common/pointer_table.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
+
+#include <algorithm>
 #include <cassert>
-#include <cstdlib>
-#include <cstring> // 添加 cstring 头文件
+#include <cstddef>
+#include <cstring>
+#include <utility>
 #include <vector>
 
-void *heap_start;                  // Start of the heap
-const size_t heap_size = 4 * 1024; // 4KB
+namespace {
+
+constexpr size_t heap_size = 4 * 1024;
 
 struct stack_ptr {
-    void **ptr;  // Local pointer variable
-    void *frame; // Address of the frame containing the pointer
+    void **ptr;
+    void *frame;
 };
-std::vector<stack_ptr> root; // Stack of pointers as local variables
 
 struct free_block {
-    size_t size;      // Size of the free block
-    free_block *next; // Pointer to the next free block
+    size_t size;
+    free_block *next;
 };
-free_block *free_list; // List of free blocks
-size_t free_size;      // Total size of free blocks
 
 struct meta_data {
-    u_int8_t marked;               // Marked flag (1 byte)
-    const gc_ptr_table *ptr_table; // Pointer table
-    size_t size;                   // Size of the block
+    u_int8_t marked;
+    const gc_ptr_table *ptr_table;
+    size_t size;
 };
 
 static_assert(heap_size % gc_layout::alignment == 0);
@@ -34,241 +35,312 @@ static_assert(gc_layout::alignment >= alignof(free_block));
 
 constexpr size_t minimum_free_block_size = gc_layout::align_up(sizeof(free_block));
 
-#ifdef GC_DEBUG
-size_t block_collected = 0; // Number of blocks collected
-#endif
-
-static meta_data *get_meta_data(void *ptr) {
-    return gc_layout::metadata<meta_data>(ptr);
-}
-
-[[noreturn]] static void invalid_pointer_table() {
+[[noreturn]] void invalid_pointer_table() {
     gc_runtime::fatal("Invalid pointer table");
 }
 
-static void *pick_free_block(size_t size, size_t &allocated_size) {
-    assert(size > 0);
+class MarkSweepState {
+  public:
+    void init() {
+        auto new_heap = gc_runtime::malloc_bytes(heap_size);
 
-    free_block *prev = nullptr;
-    free_block *cur = free_list;
-
-    while (cur != nullptr && cur->size < size) {
-        prev = cur;
-        cur = cur->next;
+        release_roots();
+        heap_ = std::move(new_heap);
+        free_list_ = reinterpret_cast<free_block *>(heap_.get());
+        free_list_->size = heap_size;
+        free_list_->next = nullptr;
+        free_size_ = heap_size;
+        block_collected_ = 0;
+        initialized_ = true;
     }
 
-    if (cur == nullptr) {
-        // If no free block is large enough, collect garbage
-        gc_collect();
+    void *allocate(size_t size) noexcept {
+        require_initialized();
 
-        // Try again
-        prev = nullptr;
-        cur = free_list;
-        while (cur != nullptr && cur->size < size) {
-            prev = cur;
-            cur = cur->next;
-        }
+        size_t requested_size;
+        if (!gc_layout::block_size<meta_data>(size, requested_size) || requested_size > heap_size)
+            gc_allocation_failure();
 
-        if (cur == nullptr) {
-            return nullptr;
-        }
+        size_t allocated_size;
+        auto *block = static_cast<meta_data *>(pick_free_block(requested_size, allocated_size));
+        if (block == nullptr)
+            gc_allocation_failure();
+
+        block->ptr_table = nullptr;
+        block->size = allocated_size;
+        block->marked = 0;
+
+        void *payload = gc_layout::payload(block);
+        std::memset(payload, 0, size);
+        return payload;
     }
 
-    const size_t current_size = cur->size;
-    const size_t remainder = current_size - size;
+    void add_root(void *ptr_address, void *frame_address) {
+        require_initialized();
 
-    // Keep the remainder only when it can hold an aligned free-list node.
-    if (remainder >= minimum_free_block_size) {
-        free_block *new_block = (free_block *)((u_int64_t)cur + size);
-        new_block->size = remainder;
-        new_block->next = cur->next;
-
-        if (prev == nullptr) {
-            free_list = new_block;
-        } else {
-            prev->next = new_block;
-        }
-
-        free_size -= size;
-        allocated_size = size;
-        return cur;
-    } else {
-        if (prev == nullptr) {
-            free_list = cur->next;
-        } else {
-            prev->next = cur->next;
-        }
-
-        free_size -= current_size;
-        allocated_size = current_size;
-        return cur;
+        auto **ptr = static_cast<void **>(ptr_address);
+        roots_.push_back({ptr, frame_address});
+        *ptr = nullptr;
     }
-}
 
-static void mark(void *ptr) {
-    meta_data *meta_ptr = get_meta_data(ptr);
+    void register_object(void *ptr, const gc_ptr_table *ptr_map) const noexcept {
+        require_initialized();
 
-    if (meta_ptr->marked)
-        return;
+        meta_data *meta_ptr = get_meta_data(ptr);
+        assert(meta_ptr->ptr_table == nullptr);
 
-    // Mark the block
-    meta_ptr->marked = 1;
+        if (ptr_map == nullptr)
+            invalid_pointer_table();
+        assert(ptr_map->array_len > 0);
+        assert(ptr_map->struct_size > 0);
+        assert(!ptr_map->positions.empty());
 
-    if (meta_ptr->ptr_table == nullptr)
-        return;
+        size_t payload_size;
+        const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
+        if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
+            payload_size > payload_capacity)
+            invalid_pointer_table();
 
-    // Recursively mark the children
-    u_int64_t cur_struct = (u_int64_t)ptr;
-    for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
-        for (size_t j = 0; j < meta_ptr->ptr_table->positions.size(); j++) {
-            void **child_ptr = (void **)(cur_struct + meta_ptr->ptr_table->positions[j]);
-            if (*child_ptr != nullptr) {
-                mark(*child_ptr);
+        meta_ptr->ptr_table = ptr_map;
+    }
+
+    void copy_pointer(void *dst_address, void *src) const noexcept {
+        require_initialized();
+        *static_cast<void **>(dst_address) = src;
+    }
+
+    void collect() noexcept {
+        require_initialized();
+        mark_phase();
+        sweep_phase();
+    }
+
+    void pop_roots() noexcept {
+        require_initialized();
+        if (roots_.empty())
+            return;
+
+        void *frame_address = roots_.back().frame;
+        while (!roots_.empty() && roots_.back().frame == frame_address)
+            roots_.pop_back();
+    }
+
+    void cleanup() noexcept {
+        heap_.reset();
+        free_list_ = nullptr;
+        free_size_ = 0;
+        block_collected_ = 0;
+        release_roots();
+        initialized_ = false;
+    }
+
+    size_t free_size() const noexcept { return free_size_; }
+
+    size_t block_collected() const noexcept { return block_collected_; }
+
+    size_t root_size() const noexcept { return roots_.size(); }
+
+    mem_block_info *memory_layout() const {
+        require_initialized();
+
+        std::vector<mem_block_info> mem_blocks;
+        std::byte *heap_end = heap_.get() + heap_size;
+        std::byte *scanning = heap_.get();
+        free_block *next_free_block = free_list_;
+
+        while (scanning < heap_end) {
+            if (next_free_block != nullptr &&
+                scanning == reinterpret_cast<std::byte *>(next_free_block)) {
+                const size_t size = next_free_block->size;
+                mem_blocks.push_back({scanning, size, 1});
+                scanning += size;
+                next_free_block = next_free_block->next;
+            } else {
+                auto *meta_ptr = reinterpret_cast<meta_data *>(scanning);
+                mem_blocks.push_back({scanning, meta_ptr->size, 0});
+                scanning += meta_ptr->size;
             }
         }
-        cur_struct += meta_ptr->ptr_table->struct_size;
+
+        auto *layout = new mem_block_info[mem_blocks.size() + 1];
+        std::copy(mem_blocks.begin(), mem_blocks.end(), layout);
+        layout[mem_blocks.size()] = {nullptr, 0, 0};
+        return layout;
     }
-}
 
-static void mark_phase() {
-    for (auto [ptr, _] : root) {
-        if (*ptr != nullptr)
-            mark(*ptr);
+  private:
+    static meta_data *get_meta_data(void *ptr) noexcept {
+        return gc_layout::metadata<meta_data>(ptr);
     }
-}
 
-static void sweep_phase() {
-    char *heap_end = static_cast<char *>(heap_start) + heap_size;
+    void require_initialized() const noexcept {
+        if (!initialized_)
+            gc_runtime::fatal("GC is not initialized");
+    }
 
-    char *sweeping = static_cast<char *>(heap_start);
-    free_block *next_free_block = free_list;
-    free_block *prev_free_block = nullptr;
+    void *pick_free_block(size_t size, size_t &allocated_size) noexcept {
+        assert(size > 0);
 
-    while (sweeping < heap_end) {
-        if (next_free_block != nullptr && sweeping == reinterpret_cast<char *>(next_free_block)) {
-            // Skip the free block
-            sweeping += next_free_block->size;
+        free_block *previous = nullptr;
+        free_block *current = free_list_;
+        while (current != nullptr && current->size < size) {
+            previous = current;
+            current = current->next;
+        }
 
-            prev_free_block = next_free_block;
-            next_free_block = next_free_block->next;
-        } else {
+        if (current == nullptr) {
+            collect();
+            previous = nullptr;
+            current = free_list_;
+            while (current != nullptr && current->size < size) {
+                previous = current;
+                current = current->next;
+            }
+            if (current == nullptr)
+                return nullptr;
+        }
+
+        const size_t current_size = current->size;
+        const size_t remainder = current_size - size;
+        if (remainder >= minimum_free_block_size) {
+            auto *new_block =
+                reinterpret_cast<free_block *>(reinterpret_cast<std::byte *>(current) + size);
+            new_block->size = remainder;
+            new_block->next = current->next;
+
+            if (previous == nullptr)
+                free_list_ = new_block;
+            else
+                previous->next = new_block;
+
+            free_size_ -= size;
+            allocated_size = size;
+            return current;
+        }
+
+        if (previous == nullptr)
+            free_list_ = current->next;
+        else
+            previous->next = current->next;
+
+        free_size_ -= current_size;
+        allocated_size = current_size;
+        return current;
+    }
+
+    void mark(void *ptr) noexcept {
+        meta_data *meta_ptr = get_meta_data(ptr);
+        if (meta_ptr->marked)
+            return;
+
+        meta_ptr->marked = 1;
+        if (meta_ptr->ptr_table == nullptr)
+            return;
+
+        auto *cur_struct = static_cast<std::byte *>(ptr);
+        for (size_t i = 0; i < meta_ptr->ptr_table->array_len; i++) {
+            for (size_t position : meta_ptr->ptr_table->positions) {
+                auto **child_ptr = reinterpret_cast<void **>(cur_struct + position);
+                if (*child_ptr != nullptr)
+                    mark(*child_ptr);
+            }
+            cur_struct += meta_ptr->ptr_table->struct_size;
+        }
+    }
+
+    void mark_phase() noexcept {
+        for (auto [ptr, frame] : roots_) {
+            (void)frame;
+            if (*ptr != nullptr)
+                mark(*ptr);
+        }
+    }
+
+    void sweep_phase() noexcept {
+        std::byte *heap_end = heap_.get() + heap_size;
+        std::byte *sweeping = heap_.get();
+        free_block *next_free_block = free_list_;
+        free_block *previous_free_block = nullptr;
+
+        while (sweeping < heap_end) {
+            if (next_free_block != nullptr &&
+                sweeping == reinterpret_cast<std::byte *>(next_free_block)) {
+                sweeping += next_free_block->size;
+                previous_free_block = next_free_block;
+                next_free_block = next_free_block->next;
+                continue;
+            }
+
             assert(next_free_block == nullptr ||
-                   sweeping < reinterpret_cast<char *>(next_free_block));
-            meta_data *meta_ptr = reinterpret_cast<meta_data *>(sweeping);
+                   sweeping < reinterpret_cast<std::byte *>(next_free_block));
+            auto *meta_ptr = reinterpret_cast<meta_data *>(sweeping);
             const size_t block_size = meta_ptr->size;
 
             if (meta_ptr->marked == 0) {
-                // Unmarked block
-                // Add the block to the free list
-                free_block *new_free_block = reinterpret_cast<free_block *>(sweeping);
+                auto *new_free_block = reinterpret_cast<free_block *>(sweeping);
                 new_free_block->size = block_size;
                 new_free_block->next = next_free_block;
 
-                if (prev_free_block != nullptr) {
-                    prev_free_block->next = new_free_block;
-                } else {
-                    free_list = new_free_block;
-                }
-                prev_free_block = new_free_block;
+                if (previous_free_block != nullptr)
+                    previous_free_block->next = new_free_block;
+                else
+                    free_list_ = new_free_block;
+                previous_free_block = new_free_block;
 
-                free_size += block_size;
-
-#ifdef GC_DEBUG
-                block_collected++;
-#endif
+                free_size_ += block_size;
+                block_collected_++;
             } else {
-                // Marked block
-                // Unmark the block
                 meta_ptr->marked = 0;
             }
 
             sweeping += block_size;
         }
-    }
 
-    // Merge adjacent free blocks
-    // TODO: optimize this, merge in the previous loop
-    for (free_block *cur = free_list; cur != nullptr; cur = cur->next) {
-        free_block *next = cur->next;
-        while (next != nullptr && (char *)cur + cur->size == (char *)next) {
-            cur->size += next->size;
-            cur->next = next = next->next;
+        for (free_block *current = free_list_; current != nullptr; current = current->next) {
+            free_block *next = current->next;
+            while (next != nullptr && reinterpret_cast<std::byte *>(current) + current->size ==
+                                          reinterpret_cast<std::byte *>(next)) {
+                current->size += next->size;
+                current->next = next = next->next;
+            }
         }
     }
-}
+
+    void release_roots() noexcept {
+        std::vector<stack_ptr> empty;
+        roots_.swap(empty);
+    }
+
+    bool initialized_ = false;
+    gc_runtime::malloc_ptr<> heap_;
+    std::vector<stack_ptr> roots_;
+    free_block *free_list_ = nullptr;
+    size_t free_size_ = 0;
+    size_t block_collected_ = 0;
+};
+
+MarkSweepState state;
+
+} // namespace
 
 extern "C" {
-void gc_init(void) noexcept try {
-    heap_start = std::malloc(heap_size);
-    assert(heap_start != nullptr);
 
-    free_list = (free_block *)heap_start;
-    free_list->size = heap_size;
-    free_list->next = nullptr;
-
-    free_size = heap_size;
-
-#ifdef GC_DEBUG
-    block_collected = 0;
-#endif
-} catch (...) {
+void gc_init(void) noexcept try { state.init(); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
-void *gc_malloc(size_t size) noexcept try {
-    size_t requested_size;
-    if (!gc_layout::block_size<meta_data>(size, requested_size) || requested_size > heap_size)
-        gc_allocation_failure();
-
-    size_t allocated_size;
-    meta_data *block = (meta_data *)pick_free_block(requested_size, allocated_size);
-    if (block == nullptr) {
-        gc_allocation_failure();
-    }
-
-    block->ptr_table = nullptr;
-    block->size = allocated_size;
-    block->marked = 0;
-
-    void *payload = gc_layout::payload(block);
-    std::memset(payload, 0, size);
-
-    return payload;
-} catch (...) {
+void *gc_malloc(size_t size) noexcept try { return state.allocate(size); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
 void gc_local_var(void *ptr_address) noexcept try {
-    auto **ptr = static_cast<void **>(ptr_address);
-    void *frame_address = __builtin_frame_address(1);
-    root.push_back({ptr, frame_address});
-
-    // Clear the pointer
-    *ptr = nullptr;
+    state.add_root(ptr_address, __builtin_frame_address(1));
 } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
 void gc_register(void *ptr, const gc_ptr_table *ptr_map) noexcept try {
-    meta_data *meta_ptr = get_meta_data(ptr);
-
-    // 只允许注册一次
-    assert(meta_ptr->ptr_table == nullptr);
-
-    // 保证 ptr_map 合法
-    if (ptr_map == nullptr)
-        invalid_pointer_table();
-    assert(ptr_map->array_len > 0);
-    assert(ptr_map->struct_size > 0);
-    assert(!ptr_map->positions.empty());
-
-    size_t payload_size;
-    const size_t payload_capacity = meta_ptr->size - gc_layout::header_size<meta_data>;
-    if (!gc_layout::checked_mul(ptr_map->array_len, ptr_map->struct_size, payload_size) ||
-        payload_size > payload_capacity)
-        invalid_pointer_table();
-
-    meta_ptr->ptr_table = ptr_map;
+    state.register_object(ptr, ptr_map);
 } catch (...) {
     gc_runtime::handle_current_exception();
 }
@@ -277,93 +349,46 @@ void gc_allocation_failure(void) noexcept {
     gc_runtime::fatal("Allocation failed");
 }
 
-void gc_collect(void) noexcept try {
-    mark_phase();
-    sweep_phase();
-} catch (...) {
-    gc_runtime::handle_current_exception();
+void gc_collect(void) noexcept {
+    state.collect();
 }
 
 void gc_cleanup(void) noexcept {
-    std::free(heap_start);
-    heap_start = nullptr;
-    free_list = nullptr;
-    free_size = 0;
-    root.clear();
+    state.cleanup();
 }
 
-// No need to handle this in mark-sweep
 void gc_ptr_copy(void *dst_address, void *src) noexcept {
-    auto **dst = static_cast<void **>(dst_address);
-    *dst = src;
+    state.copy_pointer(dst_address, src);
 }
 
 void gc_pop(void) noexcept {
-    void *frame_address = root.back().frame;
-    while (!root.empty() && root.back().frame == frame_address) {
-        root.pop_back();
-    }
+    state.pop_roots();
 }
 
 #ifdef GC_DEBUG
 size_t gc_heap_size(void) noexcept {
     return heap_size;
 }
+
 size_t gc_free_size(void) noexcept {
-    return free_size;
+    return state.free_size();
 }
+
 size_t gc_block_collected(void) noexcept {
-    return block_collected;
+    return state.block_collected();
 }
+
 size_t gc_meta_size(void) noexcept {
     return gc_layout::header_size<meta_data>;
 }
+
 size_t gc_root_size(void) noexcept {
-    return root.size();
+    return state.root_size();
 }
 
-mem_block_info *gc_mem_layout(void) noexcept try {
-    std::vector<mem_block_info> mem_blocks;
-
-    void *heap_end = (char *)heap_start + heap_size;
-
-    void *scanning = heap_start;
-    free_block *prev_free_block = nullptr;
-    free_block *next_free_block = free_list;
-
-    while (scanning < heap_end) {
-        if (scanning == next_free_block) {
-            size_t size = next_free_block->size;
-            void *end = (char *)scanning + size;
-
-            // std::cout << "Start: " << scanning << ", End: " << end
-            //           << ", Size: " << size << ", Free\n";
-            mem_blocks.push_back({scanning, size, 1});
-
-            scanning = end;
-
-            prev_free_block = next_free_block;
-            next_free_block = next_free_block->next;
-        } else {
-            // size_t size = *(size_t *)((char *)scanning + 1);
-            size_t size = ((meta_data *)scanning)->size;
-            void *end = (char *)scanning + size;
-
-            // std::cout << "Start: " << scanning << ", End: " << end
-            //   << ", Size: " << size << ", Allocated\n";
-            mem_blocks.push_back({scanning, size, 0});
-
-            scanning = end;
-        }
-    }
-
-    mem_block_info *mem_block_array = new mem_block_info[mem_blocks.size() + 1];
-    std::copy(mem_blocks.begin(), mem_blocks.end(), mem_block_array);
-    mem_block_array[mem_blocks.size()] = {nullptr, 0, 0};
-
-    return mem_block_array;
-} catch (...) {
+mem_block_info *gc_mem_layout(void) noexcept try { return state.memory_layout(); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 #endif
-}
+
+} // extern "C"

@@ -18,8 +18,8 @@
 | --- | --- | --- | --- | --- | --- |
 | [x] | 1 | P1 | gc.h / ABI | 固化纯 C 接口边界，并增加最小 C11、C++20 调用方编译测试 | 同一个 `gc.h` 可被严格 C11 和 C++20 编译；导出符号保持 C linkage；公共声明不依赖 C++ 类型 |
 | [x] | 1 | P1 | all | 统一导出函数的异常边界，将 C++ 异常转换为明确的失败行为 | `std::bad_alloc` 等异常不会跨过 `extern "C"`；C 调用方只观察到文档规定的返回值或终止行为 |
-| [ ] | 2 | P1 | all | 将每种收集器的 heap、root、free list 和统计数据封装到单一内部状态对象 | 删除散落的可变全局变量；初始化、收集和清理操作通过状态对象维护不变量 |
-| [ ] | 2 | P1 | all | 使用 RAII 管理堆缓冲区和内部辅助资源，同时保留显式 `gc_init()` / `gc_cleanup()` C API | 初始化中途失败和重复清理不泄漏；资源释放不依赖手工维护多处分支 |
+| [x] | 2 | P1 | all | 将每种收集器的 heap、root、free list 和统计数据封装到单一内部状态对象 | 删除散落的可变全局变量；初始化、收集和清理操作通过状态对象维护不变量 |
+| [x] | 2 | P1 | all | 使用 RAII 管理堆缓冲区和内部辅助资源，同时保留显式 `gc_init()` / `gc_cleanup()` C API | 初始化中途失败和重复清理不泄漏；资源释放不依赖手工维护多处分支 |
 | [ ] | 3 | P2 | common | 抽取共享的 `RootSet`、内存布局、pointer table 校验和 fatal error 组件 | 三种实现复用相同基础组件；删除重复逻辑且不改变各自算法语义 |
 | [ ] | 3 | P2 | all | 用 `std::byte`、受检范围和小型辅助类型替换裸整数地址运算与重复强制转换 | 核心扫描代码直接表达“块、payload、字段槽位”；边界检查集中且无未定义指针运算 |
 | [ ] | 4 | P2 | collectors | 按 `ref_count` → `copying` → `mark_sweep` 顺序逐个重构，每次只迁移一种算法 | 每一步都是可独立审查的提交；对应专项测试、全量测试和 sanitizer 均通过 |
@@ -40,11 +40,11 @@
 
 | 状态 | 优先级 | 模块 | TODO | 完成标准 |
 | --- | --- | --- | --- | --- |
-| [ ] | P1 | all | 为 `gc_init()`、`gc_collect()`、`gc_malloc()`、`gc_cleanup()` 增加初始化状态检查，并处理重复初始化 | 未初始化、重复初始化、清理后调用都得到明确行为 |
-| [ ] | P1 | all | 让空 root 集合调用 `gc_pop()` 安全返回 | 不再访问空 vector 的 `back()` |
+| [x] | P1 | all | 为 `gc_init()`、`gc_collect()`、`gc_malloc()`、`gc_cleanup()` 增加初始化状态检查，并处理重复初始化 | 未初始化、重复初始化、清理后调用都得到明确行为 |
+| [x] | P1 | all | 让空 root 集合调用 `gc_pop()` 安全返回 | 不再访问空 vector 的 `back()` |
 | [ ] | P1 | all | 重新设计 root 生命周期，减少对 `__builtin_frame_address(1)` 的依赖 | 在优化构建、不同编译器和递归调用下行为稳定；最好改为显式 scope/token API |
 | [ ] | P1 | all | 明确 `gc_local_var()`、`gc_ptr_copy()` 的所有权和调用约束 | 文档说明哪些指针必须注册、哪些字段必须通过 `gc_ptr_copy()` 更新 |
-| [ ] | P1 | ref_count | 让 `gc_cleanup()` 释放仍存活的对象，或明确要求调用者先释放全部引用 | LeakSanitizer 无遗留 GC 对象；cleanup 后状态一致 |
+| [x] | P1 | ref_count | 让 `gc_cleanup()` 释放仍存活的对象，或明确要求调用者先释放全部引用 | LeakSanitizer 无遗留 GC 对象；cleanup 后状态一致 |
 | [ ] | P1 | ref_count | 明确或实现循环引用回收 | 文档明确“循环引用不会回收”，或增加 cycle collector 测试与实现 |
 | [x] | P1 | all | 为 `gc_register()` 校验 pointer table 的范围、offset、数组长度和对象 payload 大小 | 非法指针表被拒绝，不会在 mark/copy/decrement 阶段越界 |
 | [x] | P1 | all | 明确 pointer table 的所有权和生命周期，避免 metadata 保存悬空 table 指针 | pointer table 在对象生命周期内有效，且不产生未释放的辅助内存 |
@@ -82,7 +82,7 @@
 ## 当前验证基线
 
 - [x] 普通 Clang 构建通过
-- [x] 当前 CTest：72/72 通过
+- [x] 当前 CTest：84/84 通过
 - [ ] ASan/UBSan 全量测试通过
 - [x] 连续 GC 的嵌套对象测试通过
 - [ ] Release（`NDEBUG`）测试通过
