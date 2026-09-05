@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-int main() {
+int main(void) {
     const size_t int_block_size = test_gc_block_size(sizeof(int));
     const size_t heap_size = gc_heap_size();
 

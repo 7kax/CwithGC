@@ -22,8 +22,8 @@
 | [x] | 2 | P1 | all | Use RAII for heap buffers and internal helper resources while retaining the explicit `gc_init()` / `gc_cleanup()` C API | Partial initialization failures and repeated cleanup do not leak; resource release does not depend on manually maintained branches |
 | [x] | 3 | P2 | common | Extract shared `RootSet`, memory-layout, pointer-table validation, and fatal-error components | All three implementations reuse the same foundation; duplicate logic is removed without changing collector semantics |
 | [x] | 3 | P2 | all | Replace raw integer address arithmetic and repeated casts with `std::byte`, checked ranges, and small helper types | Core scanning code directly expresses blocks, payloads, and field slots; bounds checks are centralized and pointer arithmetic has no undefined behavior |
-| [ ] | 4 | P2 | collectors | Refactor collectors one at a time in the order `ref_count` -> `copying` -> `mark_sweep` | Each step is an independently reviewable commit; focused tests, the full suite, and sanitizers pass |
-| [ ] | 4 | P2 | CMake / CI | Add C ABI smoke tests, strict warnings, clang-format checks, and sanitizer checks | C and C++ callers are covered by automated tests; new code passes formatting and the agreed warning/sanitizer configurations |
+| [x] | 4 | P2 | collectors | Refactor collectors one at a time in the order `ref_count` -> `copying` -> `mark_sweep` | Each step is an independently reviewable commit; focused tests, the full suite, and sanitizers pass |
+| [x] | 4 | P2 | CMake / CI | Add C ABI smoke tests, strict warnings, clang-format checks, and sanitizer checks | C and C++ callers are covered by automated tests; new code passes formatting and the agreed warning/sanitizer configurations |
 
 ## Core Correctness
 
@@ -56,7 +56,7 @@
 | [x] | P1 | gc.h / all | Replace `u_int8_t` and `u_int64_t` with standard types and avoid representing pointer arithmetic directly as integers | Use `uint8_t`, `uintptr_t`, or standard byte-pointer arithmetic |
 | [x] | P1 | gc.h | Redesign `positions[0]` to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
 | [x] | P1 | all | Avoid integer comparisons and arithmetic on object pointers; use safe byte pointers and bounds checks consistently | Behavior is defined under UBSan, strict compilers, and 32-bit and 64-bit environments |
-| [ ] | P1 | debug API | Standardize allocation and deallocation for `gc_mem_layout()`; the implementation currently uses `new[]` while tests use `free()` | ASan no longer reports an allocation/deallocation mismatch; preferably provide `gc_mem_layout_free()` |
+| [x] | P1 | debug API | Standardize allocation and deallocation for `gc_mem_layout()` | Callers release layouts through `gc_mem_layout_free()`; ASan reports no allocation/deallocation mismatch |
 | [ ] | P1 | ref_count | Decide whether `gc_mem_layout()` supports the reference-counting implementation instead of exposing an API that always returns `nullptr` | Documentation and implementation agree, and generic debugging code cannot misuse the interface |
 
 ## Testing and Validation
@@ -64,8 +64,8 @@
 | Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
 | [ ] | P1 | tests | Add regression tests for nested objects, cycles, repeated collections, full-heap allocation, and self-assignment | Every fixed core bug has a minimal reproducing test |
-| [ ] | P1 | tests | Add ASan, UBSan, and LeakSanitizer build/test configurations | CI or a local command can run sanitizer tests in one step |
-| [ ] | P2 | verify | Replace dangerous examples hidden in unused `_main()` functions with tests that actually detect dangling pointers, double frees, and use-after-free | Verification cases detect the expected signal or sanitizer report instead of checking only for normal exit |
+| [x] | P1 | tests | Add ASan, UBSan, and LeakSanitizer build/test configurations | CI or a local command can run sanitizer tests in one step |
+| [ ] | P2 | verify | Add negative tests that actually detect dangling pointers, double frees, and use-after-free; the unused `_main()` examples have been removed | Verification cases detect the expected signal or sanitizer report instead of checking only for normal exit |
 | [ ] | P2 | tests | Avoid relying only on `assert` so Release builds still check results | Tests fail correctly when `NDEBUG` is defined |
 | [x] | P2 | tests | Free dynamically allocated pointer tables in tests or replace them with static constant tables | LeakSanitizer reports no leaks from test helper memory |
 
@@ -74,21 +74,21 @@
 | Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
 | [x] | P2 | CMake | Replace global `include_directories()` with `target_include_directories()` and `target_link_libraries(... PRIVATE ...)` | Target dependency boundaries are explicit and directories do not pollute one another |
-| [ ] | P2 | CMake | Add a `BUILD_TESTING` option and separate ordinary unit tests from verify cases that intentionally trigger errors | Default builds are controllable and negative tests do not masquerade as ordinary passing tests |
-| [ ] | P2 | gc.h / CMake | Stop defining `GC_DEBUG` unconditionally in the public header | Build configuration determines whether the debug API is enabled |
+| [x] | P2 | CMake | Add a `BUILD_TESTING` option and keep ordinary unit tests separate from verification cases | Default builds are controllable and library-only builds exclude all test targets |
+| [x] | P2 | gc.h / CMake | Stop defining `GC_DEBUG` unconditionally in the public header | `GC_ENABLE_DEBUG_API` determines whether the debug API is declared and built |
 | [ ] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
-| [ ] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | Formatting and language checks can run automatically |
+| [x] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | The `quality-check` target runs formatting and language checks automatically |
 
 ## Current Validation Baseline
 
 - [x] Standard Clang build passes
 - [x] Current CTest result: 84/84 passing
-- [ ] Full ASan/UBSan test suite passes
+- [x] Full ASan/UBSan test suite passes
 - [x] Repeated-GC nested-object tests pass
 - [ ] Release (`NDEBUG`) tests pass
 
 ## Confirmed Issues Discovered During Iteration
 
 - [ ] **Root-frame lookup triggers strict warnings**: Clang rejects `__builtin_frame_address(1)` with `-Wframe-address` under `-Wall -Wextra -Wpedantic -Werror`. The strict build currently requires the temporary `-Wno-error=frame-address` workaround; resolve this as part of the root-lifetime redesign.
-- [ ] **Full sanitizer validation remains blocked by the debug API**: Phase 3 validated 34 safety tests with ASan, UBSan, and LeakSanitizer. Full CTest coverage still requires fixing the `new[]`/`free()` allocation mismatch in `gc_mem_layout()`.
+- [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 84 tests with ASan, UBSan, and LeakSanitizer after fixing the `gc_mem_layout()` allocation/deallocation contract.
 - [ ] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; document this lifecycle boundary in the C API.

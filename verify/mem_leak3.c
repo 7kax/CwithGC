@@ -1,32 +1,12 @@
 #include "gc.h"
 
 #include <assert.h>
-#include <stdlib.h>
 
 struct tree_node {
     int data;
     struct tree_node *left;
     struct tree_node *right;
 };
-
-// Unsafe version.
-void _func() {
-    struct tree_node *root;
-    root = malloc(sizeof(struct tree_node) * 10);
-
-    for (int i = 0; i < 10; i++) {
-        root[i].data = i;
-        root[i].left = malloc(sizeof(struct tree_node));
-        root[i].left->data = i + 1;
-        root[i].right = malloc(sizeof(struct tree_node));
-        root[i].right->data = i + 2;
-    }
-}
-
-int _main() {
-    _func();
-    return 0;
-}
 
 gc_ptr_table *ptr_map = NULL;
 gc_ptr_table *ptr_map_array = NULL;
@@ -37,7 +17,7 @@ void construct_ptr_table_array(void) {
     };
     ptr_map_array = gc_ptr_table_create(10, sizeof(struct tree_node), 2, positions);
     assert(ptr_map_array != NULL);
-};
+}
 void construct_ptr_table(void) {
     const size_t positions[] = {
         offsetof(struct tree_node, left),
@@ -45,9 +25,9 @@ void construct_ptr_table(void) {
     };
     ptr_map = gc_ptr_table_create(1, sizeof(struct tree_node), 2, positions);
     assert(ptr_map != NULL);
-};
+}
 
-void func() {
+void func(void) {
     construct_ptr_table_array();
     construct_ptr_table();
 
@@ -74,9 +54,9 @@ void func() {
     }
 
     gc_pop();
-};
+}
 
-int main() {
+int main(void) {
     gc_init();
 
     int prev_free_size = gc_free_size();

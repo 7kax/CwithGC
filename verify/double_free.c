@@ -1,23 +1,6 @@
 #include "gc.h"
 
-#include <stdlib.h>
-
-int _main() {
-    int *ptr;
-
-    // Allocate memory normally.
-    ptr = malloc(sizeof(int) * 10);
-
-    // Free the memory.
-    free(ptr);
-
-    // Free the memory again.
-    free(ptr);
-
-    return 0;
-}
-
-int main() {
+int main(void) {
     gc_init();
 
     int *ptr;

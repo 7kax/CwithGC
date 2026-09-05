@@ -14,19 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Unsafe version.
-int _main() {
-    int *ptr;
-
-    // Allocate memory normally.
-    ptr = malloc(sizeof(int) * 10);
-
-    // Request an oversized allocation; malloc should return NULL.
-    ptr = malloc(__LONG_LONG_MAX__);
-
-    return 0;
-}
-
 // Signal handler for the signal raised by abort.
 void signal_handler(int sig) {
     if (sig == SIGABRT) {
@@ -34,14 +21,11 @@ void signal_handler(int sig) {
     }
 }
 
-int main() {
+int main(void) {
     // Register the handler for SIGABRT.
     signal(SIGABRT, signal_handler);
 
     gc_init();
-
-    // Read the current heap size.
-    size_t heap_size = gc_heap_size();
 
     // Read the current free-space size.
     size_t free_size = gc_free_size();

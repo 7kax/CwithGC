@@ -3,10 +3,8 @@
 #include <assert.h>
 #include <stdio.h>
 
-void foo() {
+void foo(void) {
     const size_t alloc_size = 100;
-    const size_t meta_size = gc_meta_size();
-    const size_t heap_size = gc_heap_size();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);
@@ -22,12 +20,10 @@ void foo() {
     gc_pop();
 }
 
-int main() {
+int main(void) {
     gc_init();
 
     const size_t alloc_size = 100;
-    const size_t meta_size = gc_meta_size();
-    const size_t heap_size = gc_heap_size();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);

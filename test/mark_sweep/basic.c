@@ -3,9 +3,8 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-int main() {
+int main(void) {
     gc_init();
 
     const size_t alloc_size = 1024;
@@ -30,7 +29,7 @@ int main() {
     assert(layout[2].size == heap_size - 2 * block_size);
     assert(layout[2].is_free == 1);
     assert(gc_block_collected() == 0);
-    free(layout);
+    gc_mem_layout_free(layout);
 
     gc_ptr_copy(&ptr, ptr2); // block A is unreachable
     gc_collect();
@@ -43,7 +42,7 @@ int main() {
     assert(layout[2].size == heap_size - 2 * block_size);
     assert(layout[2].is_free == 1);
     assert(gc_block_collected() == 1);
-    free(layout);
+    gc_mem_layout_free(layout);
 
     void *ptr3;
     gc_local_var(&ptr3);
@@ -59,7 +58,7 @@ int main() {
     assert(layout[2].size == heap_size - 2 * block_size);
     assert(layout[2].is_free == 1);
     assert(gc_block_collected() == 1);
-    free(layout);
+    gc_mem_layout_free(layout);
 
     gc_ptr_copy(&ptr2, ptr3); // no block becomes unreachable
     gc_collect();
@@ -72,7 +71,7 @@ int main() {
     assert(layout[2].size == heap_size - 2 * block_size);
     assert(layout[2].is_free == 1);
     assert(gc_block_collected() == 1);
-    free(layout);
+    gc_mem_layout_free(layout);
 
     gc_ptr_copy(&ptr, ptr3); // block B is unreachable
     gc_collect();
@@ -83,7 +82,7 @@ int main() {
     assert(layout[1].size == heap_size - block_size);
     assert(layout[1].is_free == 1); // block B is collected and merged
     assert(gc_block_collected() == 2);
-    free(layout);
+    gc_mem_layout_free(layout);
 
     gc_pop();
 

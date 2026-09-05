@@ -1,27 +1,6 @@
 #include "gc.h"
 
-#include <stdlib.h>
-
-int _main() {
-    int *ptr;
-
-    // Allocate memory normally.
-    ptr = malloc(sizeof(int) * 10);
-
-    // Point another pointer at the same memory.
-    int *ptr2 = ptr;
-
-    // Free ptr.
-    free(ptr);
-
-    // Access the memory through ptr2.
-    // Accessing freed memory here should cause undefined behavior.
-    *ptr2 = 42;
-
-    return 0;
-}
-
-int main() {
+int main(void) {
     gc_init();
 
     int *ptr;

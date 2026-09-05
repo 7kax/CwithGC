@@ -1,4 +1,3 @@
-#include "../test_layout.h"
 #include "gc.h"
 
 #include <assert.h>

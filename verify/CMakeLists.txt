@@ -22,6 +22,7 @@ foreach(TEST_NAME ${TEST_NAMES})
             set(EXECUTABLE_NAME ${GC_ALGORITHM}_${TEST_NAME})
             add_executable(${EXECUTABLE_NAME} ${TEST_FILE})
             target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
+            gc_apply_build_options(${EXECUTABLE_NAME})
             add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
         endforeach()
     endif()
@@ -29,6 +30,7 @@ endforeach()
 
 add_executable(mark_sweep_full_heap_alloc_fail full_heap_alloc_fail.c)
 target_link_libraries(mark_sweep_full_heap_alloc_fail PRIVATE gc_mark_sweep)
+gc_apply_build_options(mark_sweep_full_heap_alloc_fail)
 add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
 set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
     PASS_REGULAR_EXPRESSION "Allocation failed"
@@ -38,11 +40,13 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(EXECUTABLE_NAME ${GC_ALGORITHM}_oversized_alloc)
     add_executable(${EXECUTABLE_NAME} oversized_alloc.c)
     target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
+    gc_apply_build_options(${EXECUTABLE_NAME})
     add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME})
 
     set(PTR_TABLE_EXECUTABLE ${GC_ALGORITHM}_overflowing_ptr_table)
     add_executable(${PTR_TABLE_EXECUTABLE} overflowing_ptr_table.c)
     target_link_libraries(${PTR_TABLE_EXECUTABLE} PRIVATE gc_${GC_ALGORITHM})
+    gc_apply_build_options(${PTR_TABLE_EXECUTABLE})
     add_test(NAME ${PTR_TABLE_EXECUTABLE} COMMAND ${PTR_TABLE_EXECUTABLE} overflow)
 
     set_tests_properties(${GC_ALGORITHM}_oversized_alloc PROPERTIES
@@ -67,6 +71,7 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(EXECUTABLE_NAME ${GC_ALGORITHM}_cpp_exception_boundary)
     add_executable(${EXECUTABLE_NAME} cpp_exception_boundary.cpp)
     target_link_libraries(${EXECUTABLE_NAME} PRIVATE gc_${GC_ALGORITHM})
+    gc_apply_build_options(${EXECUTABLE_NAME})
     add_test(NAME ${EXECUTABLE_NAME} COMMAND ${EXECUTABLE_NAME} root)
     set_tests_properties(${EXECUTABLE_NAME} PROPERTIES
         PASS_REGULAR_EXPRESSION "Allocation failure"
@@ -81,6 +86,7 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(LIFECYCLE_EXECUTABLE ${GC_ALGORITHM}_invalid_lifecycle)
     add_executable(${LIFECYCLE_EXECUTABLE} invalid_lifecycle.c)
     target_link_libraries(${LIFECYCLE_EXECUTABLE} PRIVATE gc_${GC_ALGORITHM})
+    gc_apply_build_options(${LIFECYCLE_EXECUTABLE})
 
     foreach(LIFECYCLE_CASE malloc collect after-cleanup)
         string(REPLACE "-" "_" LIFECYCLE_SUFFIX ${LIFECYCLE_CASE})

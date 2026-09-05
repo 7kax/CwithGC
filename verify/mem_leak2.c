@@ -1,29 +1,12 @@
 #include "gc.h"
 
 #include <assert.h>
-#include <stdlib.h>
 
 struct tree_node {
     int data;
     struct tree_node *left;
     struct tree_node *right;
 };
-
-// Unsafe version.
-void _func() {
-    struct tree_node *root;
-    root = malloc(sizeof(struct tree_node));
-    root->data = 1;
-    root->left = malloc(sizeof(struct tree_node));
-    root->left->data = 2;
-    root->right = malloc(sizeof(struct tree_node));
-    root->right->data = 3;
-}
-
-int _main() {
-    _func();
-    return 0;
-}
 
 gc_ptr_table *ptr_map = NULL;
 void construct_ptr_table(void) {
@@ -33,8 +16,8 @@ void construct_ptr_table(void) {
     };
     ptr_map = gc_ptr_table_create(1, sizeof(struct tree_node), 2, positions);
     assert(ptr_map != NULL);
-};
-void func() {
+}
+void func(void) {
     construct_ptr_table();
 
     struct tree_node *root;
@@ -57,9 +40,9 @@ void func() {
     // root, root->left, and root->right are not freed here.
 
     gc_pop();
-};
+}
 
-int main() {
+int main(void) {
     gc_init();
 
     int prev_free_size = gc_free_size();

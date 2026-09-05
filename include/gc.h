@@ -8,7 +8,6 @@ extern "C" {
 #define GC_NOEXCEPT
 #endif
 
-#define GC_DEBUG
 #include <stddef.h>
 
 /*
@@ -125,6 +124,13 @@ typedef struct {
     int is_free;
 } mem_block_info;
 mem_block_info *gc_mem_layout(void) GC_NOEXCEPT;
+
+/**
+ * @brief Release a memory layout returned by gc_mem_layout().
+ *
+ * Passing null is allowed.
+ */
+void gc_mem_layout_free(mem_block_info *layout) GC_NOEXCEPT;
 #endif
 
 #ifdef __cplusplus

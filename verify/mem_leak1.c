@@ -2,20 +2,8 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-// Unsafe version.
-void _func() {
-    int *ptr;
-    ptr = malloc(sizeof(int) * 10);
-}
-
-int _main() {
-    _func();
-    return 0;
-}
-
-void func() {
+void func(void) {
     int *ptr;
     gc_local_var(&ptr);
 
@@ -24,7 +12,7 @@ void func() {
     gc_pop();
 }
 
-int main() {
+int main(void) {
     gc_init();
 
     int prev_free_size = gc_free_size();

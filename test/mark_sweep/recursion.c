@@ -29,7 +29,7 @@ gc_ptr_table *construct_ptr_table(void) {
     return table;
 }
 
-int main() {
+int main(void) {
     ptr_table = construct_ptr_table();
 
     gc_init();

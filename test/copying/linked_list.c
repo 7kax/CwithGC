@@ -32,7 +32,7 @@ struct node *make_node(int data) {
     return new_node;
 }
 
-int main() {
+int main(void) {
     int elements[] = {1, 2, 3, 4, 5};
     int n = 5;
     ptr_map = construct_ptr_table();

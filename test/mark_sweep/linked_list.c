@@ -32,9 +32,9 @@ struct node *make_node(int data) {
     return new_node;
 }
 
-int main() {
+int main(void) {
     int elements[] = {1, 2, 3, 4, 5};
-    int n = 5;
+    const size_t n = 5;
     ptr_map = construct_ptr_table();
 
     gc_init();
@@ -47,7 +47,7 @@ int main() {
     gc_ptr_copy(&head, make_node(elements[0]));
     gc_ptr_copy(&cur, head);
 
-    for (int i = 1; i < n; i++) {
+    for (size_t i = 1; i < n; i++) {
         gc_ptr_copy(&new_node, make_node(elements[i]));
         gc_ptr_copy(&(cur->next), new_node);
         gc_ptr_copy(&cur, new_node);
@@ -56,7 +56,7 @@ int main() {
     gc_ptr_copy(&cur, NULL);
     gc_ptr_copy(&new_node, NULL);
 
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         assert(head->data == elements[i]);
         gc_ptr_copy((void **)&head, head->next);
     }

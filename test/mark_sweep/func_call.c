@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-void foo() {
+void foo(void) {
     const size_t alloc_size = 100;
     const size_t block_size = test_gc_block_size(alloc_size);
     const size_t heap_size = gc_heap_size();
@@ -26,7 +26,7 @@ void foo() {
     gc_pop();
 }
 
-int main() {
+int main(void) {
     gc_init();
 
     const size_t alloc_size = 100;
