@@ -9,6 +9,7 @@ set(TEST_NAMES
     linked_list
     graph
     full_heap
+    assignment
 )
 
 # 垃圾回收算法列表

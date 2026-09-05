@@ -152,17 +152,23 @@ void gc_cleanup() {
 }
 
 void gc_ptr_copy(void **dst, void *src) {
-    // 如果旧指针不为空，则减少引用计数
-    if (*dst != nullptr) {
-        decrement_ref_count(*dst);
+    void *old = *dst;
+
+    if (old == src) {
+        return;
     }
 
-    // 更新指针
-    *dst = src;
-
-    // 如果新指针不为空，则增加引用计数
+    // Retain the new object before releasing the old one. The old object may
+    // own src and recursively release it when its reference count reaches 0.
     if (src != nullptr) {
         increment_ref_count(src);
+    }
+
+    // Store before releasing old because dst may be a field inside old.
+    *dst = src;
+
+    if (old != nullptr) {
+        decrement_ref_count(old);
     }
 }
 
