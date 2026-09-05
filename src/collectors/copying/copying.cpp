@@ -1,9 +1,12 @@
 #include "common/layout.hpp"
-#include "common/memory_layout.hpp"
 #include "common/pointer_table.hpp"
 #include "common/root_set.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
+
+#ifdef GC_DEBUG
+#include "common/memory_layout.hpp"
+#endif
 
 #include <cassert>
 #include <cstddef>
@@ -24,6 +27,52 @@ struct meta_data {
 
 static_assert(heap_size % gc_layout::alignment == 0);
 
+class Semispace {
+  public:
+    void reset(gc_runtime::malloc_ptr<> memory) noexcept {
+        memory_ = std::move(memory);
+        top_ = memory_.get();
+    }
+
+    void clear() noexcept {
+        memory_.reset();
+        top_ = nullptr;
+    }
+
+    void rewind() noexcept {
+        assert(memory_ != nullptr);
+        top_ = memory_.get();
+    }
+
+    std::byte *allocate(size_t size) noexcept {
+        assert(size <= available());
+        std::byte *allocation = top_;
+        top_ += size;
+        return allocation;
+    }
+
+    std::byte *begin() const noexcept { return memory_.get(); }
+
+    std::byte *top() const noexcept { return top_; }
+
+    size_t used() const noexcept {
+        assert(memory_ != nullptr);
+        return static_cast<size_t>(top_ - memory_.get());
+    }
+
+    size_t available() const noexcept { return heap_size - used(); }
+
+    friend void swap(Semispace &lhs, Semispace &rhs) noexcept {
+        using std::swap;
+        swap(lhs.memory_, rhs.memory_);
+        swap(lhs.top_, rhs.top_);
+    }
+
+  private:
+    gc_runtime::malloc_ptr<> memory_;
+    std::byte *top_ = nullptr;
+};
+
 class CopyingState {
   public:
     void init() {
@@ -31,10 +80,8 @@ class CopyingState {
         auto new_to = gc_runtime::malloc_bytes(heap_size);
 
         roots_.clear();
-        from_ = std::move(new_from);
-        to_ = std::move(new_to);
-        free_space_ = from_.get();
-        free_size_ = heap_size;
+        from_space_.reset(std::move(new_from));
+        to_space_.reset(std::move(new_to));
         block_collected_ = 0;
         initialized_ = true;
     }
@@ -46,14 +93,12 @@ class CopyingState {
         if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size)
             gc_allocation_failure();
 
-        if (alloc_size > free_size_)
+        if (alloc_size > from_space_.available())
             collect();
-        if (alloc_size > free_size_)
+        if (alloc_size > from_space_.available())
             gc_allocation_failure();
 
-        auto *block = reinterpret_cast<meta_data *>(free_space_);
-        free_space_ += alloc_size;
-        free_size_ -= alloc_size;
+        auto *block = reinterpret_cast<meta_data *>(from_space_.allocate(alloc_size));
 
         block->copied = 0;
         block->forwarding = nullptr;
@@ -94,25 +139,24 @@ class CopyingState {
     void collect() noexcept {
         require_initialized();
 
-        free_space_ = to_.get();
-        std::byte *scan = to_.get();
+        to_space_.rewind();
+        std::byte *scan = to_space_.begin();
 
         roots_.for_each([this](void **ptr_address) noexcept {
             if (*ptr_address != nullptr)
                 *ptr_address = evacuate(*ptr_address);
         });
 
-        // Objects copied while scanning are appended at free_space, so the
+        // Objects copied while scanning are appended to to-space, so the
         // to-space itself acts as the breadth-first work queue.
-        while (scan < free_space_) {
+        while (scan < to_space_.top()) {
             auto *meta_ptr = reinterpret_cast<meta_data *>(scan);
             const size_t block_size = meta_ptr->size;
             scan_object(meta_ptr);
             scan += block_size;
         }
 
-        std::swap(from_, to_);
-        free_size_ = heap_size - static_cast<size_t>(free_space_ - from_.get());
+        swap(from_space_, to_space_);
     }
 
     void pop_roots() noexcept {
@@ -121,34 +165,34 @@ class CopyingState {
     }
 
     void cleanup() noexcept {
-        from_.reset();
-        to_.reset();
-        free_space_ = nullptr;
-        free_size_ = 0;
+        from_space_.clear();
+        to_space_.clear();
         block_collected_ = 0;
         roots_.clear();
         initialized_ = false;
     }
 
-    size_t free_size() const noexcept { return free_size_; }
+    size_t free_size() const noexcept { return initialized_ ? from_space_.available() : 0; }
 
     size_t block_collected() const noexcept { return block_collected_; }
 
     size_t root_size() const noexcept { return roots_.size(); }
 
+#ifdef GC_DEBUG
     mem_block_info *memory_layout() const {
         require_initialized();
 
         gc_layout::layout_builder layout;
-        std::byte *current = from_.get();
-        while (current < free_space_) {
+        std::byte *current = from_space_.begin();
+        while (current < from_space_.top()) {
             auto *meta_ptr = reinterpret_cast<meta_data *>(current);
             layout.add(current, meta_ptr->size, false);
             current += meta_ptr->size;
         }
-        layout.add(free_space_, free_size_, true);
+        layout.add(from_space_.top(), from_space_.available(), true);
         return layout.release();
     }
+#endif
 
   private:
     static meta_data *get_meta_data(void *ptr) noexcept {
@@ -165,10 +209,9 @@ class CopyingState {
         }
 
         const size_t block_size = old_meta->size;
-        auto *new_meta = reinterpret_cast<meta_data *>(free_space_);
+        auto *new_meta = reinterpret_cast<meta_data *>(to_space_.allocate(block_size));
         std::memcpy(new_meta, old_meta, block_size);
         void *new_payload = gc_layout::payload(new_meta);
-        free_space_ += block_size;
         block_collected_++;
 
         old_meta->copied = 1;
@@ -191,10 +234,8 @@ class CopyingState {
     }
 
     bool initialized_ = false;
-    gc_runtime::malloc_ptr<> from_;
-    gc_runtime::malloc_ptr<> to_;
-    std::byte *free_space_ = nullptr;
-    size_t free_size_ = 0;
+    Semispace from_space_;
+    Semispace to_space_;
     gc_runtime::root_set roots_;
     size_t block_collected_ = 0;
 };
