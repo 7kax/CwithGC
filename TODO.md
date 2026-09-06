@@ -42,8 +42,8 @@
 | --- | --- | --- | --- | --- |
 | [x] | P1 | all | Add initialization-state checks to `gc_init()`, `gc_collect()`, `gc_malloc()`, and `gc_cleanup()`, including repeated initialization | Calls before initialization, repeated initialization, and calls after cleanup all have defined behavior |
 | [x] | P1 | all | Make `gc_pop()` return safely when the root set is empty | The implementation no longer calls `back()` on an empty vector |
-| [ ] | P1 | all | Redesign root lifetime management to reduce reliance on `__builtin_frame_address(1)` | Behavior is stable under optimized builds, different compilers, and recursive calls; preferably use an explicit scope/token API |
-| [ ] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
+| [x] | P1 | all | Redesign root lifetime management to reduce reliance on `__builtin_frame_address(1)` | Behavior is stable under optimized builds, different compilers, and recursive calls; preferably use an explicit scope/token API |
+| [x] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
 | [x] | P1 | ref_count | Make `gc_cleanup()` release live objects, or explicitly require callers to release every reference first | LeakSanitizer reports no remaining GC objects; state is consistent after cleanup |
 | [ ] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |
 | [x] | P1 | all | Validate pointer-table ranges, offsets, array lengths, and object payload sizes in `gc_register()` | Invalid pointer tables are rejected and cannot cause out-of-bounds access during mark, copy, or decrement operations |
@@ -76,7 +76,7 @@
 | [x] | P2 | CMake | Replace global `include_directories()` with `target_include_directories()` and `target_link_libraries(... PRIVATE ...)` | Target dependency boundaries are explicit and directories do not pollute one another |
 | [x] | P2 | CMake | Add a `BUILD_TESTING` option and keep ordinary unit tests separate from verification cases | Default builds are controllable and library-only builds exclude all test targets |
 | [x] | P2 | gc.h / CMake | Stop defining `GC_DEBUG` unconditionally in the public header | `GC_ENABLE_DEBUG_API` determines whether the debug API is declared and built |
-| [ ] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
+| [x] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
 | [x] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | The `quality-check` target runs formatting and language checks automatically |
 
 ## Current Validation Baseline
@@ -89,6 +89,6 @@
 
 ## Confirmed Issues Discovered During Iteration
 
-- [ ] **Root-frame lookup triggers strict warnings**: Clang rejects `__builtin_frame_address(1)` with `-Wframe-address` under `-Wall -Wextra -Wpedantic -Werror`. The strict build currently requires the temporary `-Wno-error=frame-address` workaround; resolve this as part of the root-lifetime redesign.
+- [x] **Root-frame lookup triggers strict warnings**: The explicit scope/token API removes `__builtin_frame_address(1)`, so strict builds no longer need the temporary `-Wno-error=frame-address` workaround.
 - [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 84 tests with ASan, UBSan, and LeakSanitizer after fixing the `gc_mem_layout()` allocation/deallocation contract.
-- [ ] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; document this lifecycle boundary in the C API.
+- [x] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; the C API documents this lifecycle boundary.
