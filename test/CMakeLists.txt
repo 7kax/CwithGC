@@ -55,6 +55,12 @@ foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     endforeach()
 endforeach()
 
+# Reference counting intentionally retains unreachable cycles until cleanup.
+add_executable(ref_count_cycle ref_count/cycle.c)
+target_link_libraries(ref_count_cycle PRIVATE gc_ref_count)
+gc_apply_build_options(ref_count_cycle)
+add_test(NAME ref_count_cycle COMMAND ref_count_cycle)
+
 # Shared allocation-contract tests run against every collector.
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     add_executable(${GC_ALGORITHM}_alignment alignment.c)

@@ -45,7 +45,7 @@
 | [x] | P1 | all | Redesign root lifetime management to reduce reliance on `__builtin_frame_address(1)` | Behavior is stable under optimized builds, different compilers, and recursive calls; preferably use an explicit scope/token API |
 | [x] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
 | [x] | P1 | ref_count | Make `gc_cleanup()` release live objects, or explicitly require callers to release every reference first | LeakSanitizer reports no remaining GC objects; state is consistent after cleanup |
-| [ ] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |
+| [x] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |
 | [x] | P1 | all | Validate pointer-table ranges, offsets, array lengths, and object payload sizes in `gc_register()` | Invalid pointer tables are rejected and cannot cause out-of-bounds access during mark, copy, or decrement operations |
 | [x] | P1 | all | Define pointer-table ownership and lifetime so metadata cannot retain dangling table pointers | A pointer table remains valid for the object's lifetime and does not leak auxiliary memory |
 
@@ -82,7 +82,7 @@
 ## Current Validation Baseline
 
 - [x] Standard Clang build passes
-- [x] Current CTest result: 84/84 passing
+- [x] Current CTest result: 88/88 passing
 - [x] Full ASan/UBSan test suite passes
 - [x] Repeated-GC nested-object tests pass
 - [ ] Release (`NDEBUG`) tests pass
@@ -90,5 +90,5 @@
 ## Confirmed Issues Discovered During Iteration
 
 - [x] **Root-frame lookup triggers strict warnings**: The explicit scope/token API removes `__builtin_frame_address(1)`, so strict builds no longer need the temporary `-Wno-error=frame-address` workaround.
-- [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 84 tests with ASan, UBSan, and LeakSanitizer after fixing the `gc_mem_layout()` allocation/deallocation contract.
+- [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 88 tests with ASan, UBSan, and LeakSanitizer after fixing the `gc_mem_layout()` allocation/deallocation contract.
 - [x] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; the C API documents this lifecycle boundary.

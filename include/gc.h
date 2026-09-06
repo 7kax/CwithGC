@@ -174,7 +174,9 @@ void gc_ptr_copy(void *dst_address, void *src) GC_NOEXCEPT;
  * @brief Run the collector's collection operation.
  *
  * The reference-counting collector reclaims objects as their counts reach
- * zero, so this operation does not perform a tracing pass. The copying
+ * zero, so this operation does not perform a tracing pass. Unreachable
+ * reference-count cycles are not reclaimed; they remain until a cycle is
+ * explicitly broken or gc_cleanup() releases the runtime. The copying
  * collector evacuates reachable objects and updates registered pointer slots;
  * object addresses may change. The mark-and-sweep collector marks reachable
  * objects and reclaims unreachable ones without moving live objects.
