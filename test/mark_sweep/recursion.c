@@ -33,6 +33,7 @@ int main(void) {
     ptr_table = construct_ptr_table();
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     const size_t struct_block_size = test_gc_block_size(sizeof(struct foo));
     const size_t int_block_size = test_gc_block_size(sizeof(int));
@@ -65,7 +66,7 @@ int main(void) {
     assert(gc_block_collected() == 4);
     assert(gc_free_size() == gc_heap_size());
 
-    gc_pop();
+    gc_scope_end(scope);
 
     gc_cleanup();
     gc_ptr_table_destroy(ptr_table);

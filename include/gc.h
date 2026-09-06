@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include <stddef.h>
+#include <stdint.h>
 
 /*
  * C ABI contract: exported functions never propagate C++ exceptions. Internal
@@ -17,6 +18,9 @@ extern "C" {
 
 // Opaque description of pointer fields in a struct or an array of structs.
 typedef struct gc_ptr_table gc_ptr_table;
+
+// Opaque lifetime token for one active local-root scope.
+typedef uint64_t gc_scope_token;
 
 /**
  * @brief Create an immutable pointer table.
@@ -53,6 +57,25 @@ void gc_ptr_table_destroy(gc_ptr_table *table) GC_NOEXCEPT;
  * @brief Initialize the garbage collector.
  */
 void gc_init(void) GC_NOEXCEPT;
+
+/**
+ * @brief Begin a local-root scope.
+ *
+ * Every call to gc_local_var() must occur between a matching begin/end pair.
+ * Scope tokens must be ended in reverse order.
+ *
+ * @return A token identifying the newly active scope.
+ */
+gc_scope_token gc_scope_begin(void) GC_NOEXCEPT;
+
+/**
+ * @brief End a local-root scope.
+ *
+ * The token must identify the innermost active scope. Ending an unknown or
+ * out-of-order token terminates the process according to the C ABI failure
+ * contract.
+ */
+void gc_scope_end(gc_scope_token token) GC_NOEXCEPT;
 
 /**
  * @brief Allocate memory of the given size.

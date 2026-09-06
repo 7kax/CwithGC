@@ -12,6 +12,7 @@ int main(void) {
     void *roots[sizeof(sizes) / sizeof(sizes[0])];
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     for (size_t i = 0; i < count; i++) {
         gc_local_var(&roots[i]);
@@ -45,7 +46,7 @@ int main(void) {
     gc_collect();
     assert(gc_free_size() == gc_heap_size());
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
 
     puts("GC alignment test passed!");

@@ -5,6 +5,7 @@
 
 void foo(void) {
     const size_t alloc_size = 100;
+    gc_scope_token scope = gc_scope_begin();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);
@@ -17,11 +18,12 @@ void foo(void) {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 100;
 
@@ -53,7 +55,7 @@ int main(void) {
 
     assert(gc_block_collected() == 3); // Only A, B, and C remain.
 
-    gc_pop();
+    gc_scope_end(scope);
     assert(gc_root_size() == 0);
 
     gc_cleanup();

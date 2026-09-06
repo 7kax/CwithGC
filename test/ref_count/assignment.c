@@ -17,6 +17,7 @@ static gc_ptr_table *construct_ptr_table(void) {
 }
 
 static void test_self_assignment(void) {
+    gc_scope_token scope = gc_scope_begin();
     int *ptr;
     gc_local_var(&ptr);
     gc_ptr_copy(&ptr, gc_malloc(sizeof(int)));
@@ -34,10 +35,11 @@ static void test_self_assignment(void) {
     assert(gc_block_collected() == collected);
 
     gc_ptr_copy(&ptr, NULL);
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 static void test_child_promotion(gc_ptr_table *table) {
+    gc_scope_token scope = gc_scope_begin();
     void *root;
     gc_local_var(&root);
 
@@ -55,10 +57,11 @@ static void test_child_promotion(gc_ptr_table *table) {
 
     gc_ptr_copy(&root, NULL);
     assert(gc_block_collected() == collected + 2);
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 static void test_field_replacement(gc_ptr_table *table) {
+    gc_scope_token scope = gc_scope_begin();
     struct holder *parent;
     int *replacement;
     gc_local_var(&parent);
@@ -85,7 +88,7 @@ static void test_field_replacement(gc_ptr_table *table) {
 
     gc_ptr_copy(&parent, NULL);
     assert(gc_block_collected() == collected + 3);
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 int main(void) {

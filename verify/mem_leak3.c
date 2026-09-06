@@ -31,6 +31,7 @@ void func(void) {
     construct_ptr_table_array();
     construct_ptr_table();
 
+    gc_scope_token scope = gc_scope_begin();
     struct tree_node *root;
     gc_local_var(&root);
 
@@ -53,7 +54,7 @@ void func(void) {
         root[i].right->data = i + 2;
     }
 
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 int main(void) {

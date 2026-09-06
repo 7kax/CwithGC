@@ -9,6 +9,7 @@ int main(void) {
     const size_t heap_size = gc_heap_size();
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     // Allocate 3 blocks of memory
     int *ptr1, *ptr2, *ptr3;
@@ -64,7 +65,7 @@ int main(void) {
     assert(*ptr3 == 44);
     assert(ptr1 == NULL);
 
-    gc_pop();
+    gc_scope_end(scope);
 
     gc_cleanup();
 

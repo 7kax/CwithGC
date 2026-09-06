@@ -5,6 +5,7 @@
 
 void foo(void) {
     const size_t alloc_size = 100;
+    gc_scope_token scope = gc_scope_begin();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);
@@ -20,7 +21,7 @@ void foo(void) {
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
 
     // Release all local variables before returning from the function.
-    gc_pop();
+    gc_scope_end(scope);
 
     // Reference counting reclaims memory immediately when references are released,
     // so D, E, and F have already been reclaimed.
@@ -28,6 +29,7 @@ void foo(void) {
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 100;
     const size_t heap_size = gc_heap_size();
@@ -72,7 +74,7 @@ int main(void) {
     assert(gc_free_size() == heap_size); // All memory should be reclaimed.
     assert(gc_root_size() == 3);         // The number of roots is unchanged.
 
-    gc_pop(); // Remove the roots created in main.
+    gc_scope_end(scope); // Remove the roots created in main.
     assert(gc_root_size() == 0);
 
     gc_cleanup();

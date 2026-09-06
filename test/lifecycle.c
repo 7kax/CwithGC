@@ -11,11 +11,13 @@ int main(void) {
 
     gc_init();
 
+    gc_scope_token first_scope = gc_scope_begin();
     void *first_root;
     gc_local_var(&first_root);
     gc_ptr_copy(&first_root, gc_malloc(32));
     assert(gc_free_size() < gc_heap_size());
     assert(gc_root_size() == 1);
+    gc_scope_end(first_scope);
 
     // Reinitialization releases the old heap/allocations and root storage.
     gc_init();
@@ -28,9 +30,12 @@ int main(void) {
     assert(gc_root_size() == 0);
 
     void *second_root;
+    gc_scope_token second_scope = gc_scope_begin();
+    assert(second_scope != first_scope);
     gc_local_var(&second_root);
     gc_ptr_copy(&second_root, gc_malloc(64));
     assert(gc_root_size() == 1);
+    gc_scope_end(second_scope);
 
     // Cleanup also releases objects that are still reachable.
     gc_cleanup();

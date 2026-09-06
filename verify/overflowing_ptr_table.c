@@ -30,10 +30,14 @@ int main(int argc, char **argv) {
         gc_ptr_table *table = gc_ptr_table_create(3, sizeof(void *), 1, positions);
 
         gc_init();
+        gc_scope_token scope = gc_scope_begin();
         void *root;
         gc_local_var(&root);
         gc_ptr_copy(&root, gc_malloc(sizeof(void *)));
         gc_register(root, table);
+        gc_scope_end(scope);
+        gc_cleanup();
+        gc_ptr_table_destroy(table);
     } else {
         return EXIT_FAILURE;
     }

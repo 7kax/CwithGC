@@ -8,6 +8,7 @@ void foo(void) {
     const size_t alloc_size = 100;
     const size_t block_size = test_gc_block_size(alloc_size);
     const size_t heap_size = gc_heap_size();
+    gc_scope_token scope = gc_scope_begin();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);
@@ -23,11 +24,12 @@ void foo(void) {
     assert(gc_free_size() == heap_size - 6 * block_size);
     assert(gc_block_collected() == 0);
 
-    gc_pop();
+    gc_scope_end(scope);
 }
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 100;
     const size_t block_size = test_gc_block_size(alloc_size);
@@ -54,7 +56,7 @@ int main(void) {
     assert(gc_free_size() == heap_size - 3 * block_size);
     assert(gc_block_collected() == 3);
 
-    gc_pop();
+    gc_scope_end(scope);
     assert(gc_root_size() == 0);
 
     gc_cleanup();

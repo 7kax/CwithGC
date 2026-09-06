@@ -9,6 +9,7 @@ int main(void) {
     const size_t heap_size = gc_heap_size();
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     // Allocate three memory blocks.
     int *ptr1, *ptr2, *ptr3;
@@ -75,7 +76,7 @@ int main(void) {
     // All memory should have been reclaimed.
     assert(gc_free_size() == heap_size);
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
 
     puts("Reference counting basic test passed!");

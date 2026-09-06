@@ -26,6 +26,7 @@ int main(void) {
     signal(SIGABRT, signal_handler);
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     // Read the current free-space size.
     size_t free_size = gc_free_size();
@@ -50,7 +51,7 @@ int main(void) {
     // Reaching this point means the library did not abort after allocation failure.
 
     // Clean up resources.
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
 
     // Reaching this point means the test failed.

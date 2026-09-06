@@ -6,6 +6,8 @@
 static_assert(noexcept(gc_ptr_table_create(0, 0, 0, nullptr)));
 static_assert(noexcept(gc_ptr_table_destroy(nullptr)));
 static_assert(noexcept(gc_init()));
+static_assert(noexcept(gc_scope_begin()));
+static_assert(noexcept(gc_scope_end(0)));
 static_assert(noexcept(gc_malloc(0)));
 static_assert(noexcept(gc_local_var(nullptr)));
 static_assert(noexcept(gc_register(nullptr, nullptr)));
@@ -22,7 +24,9 @@ int main() {
         return EXIT_FAILURE;
 
     gc_init();
+    const gc_scope_token scope = gc_scope_begin();
     gc_collect();
+    gc_scope_end(scope);
     gc_cleanup();
     gc_ptr_table_destroy(table);
     return EXIT_SUCCESS;

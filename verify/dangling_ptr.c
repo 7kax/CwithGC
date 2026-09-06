@@ -2,6 +2,7 @@
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     int *ptr;
     gc_local_var(&ptr);
@@ -14,7 +15,7 @@ int main(void) {
     // ptr remains valid here.
     *ptr = 42; // Use ptr.
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
 
     return 0;

@@ -20,8 +20,6 @@ if(GC_ENABLE_STRICT_WARNINGS)
             -Wextra
             -Wpedantic
             -Werror
-            # Tracked in TODO.md until root lifetime no longer depends on caller frames.
-            -Wno-error=frame-address
         )
     elseif(MSVC)
         target_compile_options(gc_build_options INTERFACE /W4 /WX)

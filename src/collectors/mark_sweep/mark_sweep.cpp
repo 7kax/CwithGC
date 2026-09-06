@@ -172,10 +172,16 @@ class MarkSweepState {
         return payload;
     }
 
-    void add_root(void *ptr_address, void *frame_address) {
+    gc_scope_token begin_scope() {
         require_initialized();
 
-        roots_.add(ptr_address, frame_address);
+        return roots_.begin_scope();
+    }
+
+    void add_root(void *ptr_address) {
+        require_initialized();
+
+        roots_.add(ptr_address);
     }
 
     void register_object(void *ptr, const gc_ptr_table *ptr_map) const noexcept {
@@ -204,9 +210,14 @@ class MarkSweepState {
         sweep_phase();
     }
 
+    void end_scope(gc_scope_token token) noexcept {
+        require_initialized();
+        roots_.end_scope(token);
+    }
+
     void pop_roots() noexcept {
         require_initialized();
-        roots_.pop_frame();
+        roots_.pop_scope();
     }
 
     void cleanup() noexcept {
@@ -334,9 +345,15 @@ void *gc_malloc(size_t size) noexcept try { return state.allocate(size); } catch
     gc_runtime::handle_current_exception();
 }
 
-void gc_local_var(void *ptr_address) noexcept try {
-    state.add_root(ptr_address, __builtin_frame_address(1));
-} catch (...) {
+gc_scope_token gc_scope_begin(void) noexcept try { return state.begin_scope(); } catch (...) {
+    gc_runtime::handle_current_exception();
+}
+
+void gc_scope_end(gc_scope_token token) noexcept try { state.end_scope(token); } catch (...) {
+    gc_runtime::handle_current_exception();
+}
+
+void gc_local_var(void *ptr_address) noexcept try { state.add_root(ptr_address); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 

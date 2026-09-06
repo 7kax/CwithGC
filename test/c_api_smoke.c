@@ -10,7 +10,9 @@ int main(void) {
         return EXIT_FAILURE;
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
     gc_collect();
+    gc_scope_end(scope);
     gc_cleanup();
     gc_ptr_table_destroy(table);
     return EXIT_SUCCESS;

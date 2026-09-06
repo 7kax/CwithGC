@@ -12,6 +12,7 @@ static void handle_abort(int signal_number) {
 int main(void) {
     signal(SIGABRT, handle_abort);
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     void *root;
     gc_local_var(&root);
@@ -21,6 +22,9 @@ int main(void) {
     // Collection cannot reclaim the live full-heap object, so this request
     // must reach gc_allocation_failure() instead of an internal assertion.
     (void)gc_malloc(1);
+
+    gc_scope_end(scope);
+    gc_cleanup();
 
     return EXIT_FAILURE;
 }

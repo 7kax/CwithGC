@@ -6,6 +6,7 @@
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     void *root;
     gc_local_var(&root);
@@ -34,7 +35,7 @@ int main(void) {
     assert(root != NULL);
     assert(gc_free_size() == 0);
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
 
     puts("Mark-sweep full heap test passed!");

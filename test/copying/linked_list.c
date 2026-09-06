@@ -19,6 +19,7 @@ gc_ptr_table *construct_ptr_table(void) {
 gc_ptr_table *ptr_map = NULL;
 
 struct node *make_node(int data) {
+    gc_scope_token scope = gc_scope_begin();
     struct node *new_node;
     gc_local_var(&new_node);
 
@@ -27,7 +28,7 @@ struct node *make_node(int data) {
 
     new_node->data = data;
 
-    gc_pop();
+    gc_scope_end(scope);
 
     return new_node;
 }
@@ -38,6 +39,7 @@ int main(void) {
     ptr_map = construct_ptr_table();
 
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     struct node *head, *cur, *new_node;
     gc_local_var(&head);
@@ -91,7 +93,7 @@ int main(void) {
     gc_collect();
     assert(gc_free_size() == gc_heap_size());
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
     gc_ptr_table_destroy(ptr_map);
     puts("Copying linked list test passed!");

@@ -6,6 +6,7 @@
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 1024;
     const size_t block_size = test_gc_block_size(alloc_size);
@@ -84,7 +85,7 @@ int main(void) {
     assert(gc_block_collected() == 2);
     gc_mem_layout_free(layout);
 
-    gc_pop();
+    gc_scope_end(scope);
 
     gc_cleanup();
 

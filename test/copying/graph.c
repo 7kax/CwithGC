@@ -30,6 +30,7 @@ static struct node *make_node(int value, gc_ptr_table *ptr_table) {
 int main(void) {
     gc_ptr_table *ptr_table = construct_ptr_table();
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     struct node *root, *left, *right, *leaf;
     gc_local_var((void **)&root);
@@ -82,7 +83,7 @@ int main(void) {
     gc_collect();
     assert(gc_free_size() == gc_heap_size());
 
-    gc_pop();
+    gc_scope_end(scope);
     gc_cleanup();
     gc_ptr_table_destroy(ptr_table);
 

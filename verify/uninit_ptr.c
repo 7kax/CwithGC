@@ -11,6 +11,7 @@ struct foo {
 
 int main(void) {
     gc_init();
+    gc_scope_token scope = gc_scope_begin();
 
     // Local pointer variables that simulate uninitialized state.
     int *ptr1 = (int *)(uintptr_t)0xff;
@@ -32,7 +33,7 @@ int main(void) {
     assert(f.a == NULL);
     assert(f.b == NULL);
 
-    gc_pop();
+    gc_scope_end(scope);
 
     gc_cleanup();
 

@@ -30,8 +30,11 @@ int main(int argc, char **argv) {
         (void)gc_ptr_table_create(1, sizeof(void *), 1, positions);
     } else if (std::string_view(argv[1]) == "root") {
         gc_init();
+        const gc_scope_token scope = gc_scope_begin();
         void *root;
         gc_local_var(&root);
+        gc_scope_end(scope);
+        gc_cleanup();
     } else {
         return EXIT_FAILURE;
     }
