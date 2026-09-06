@@ -29,6 +29,10 @@ template <typename T = std::byte> MallocPtr<T> malloc_bytes(std::size_t size) {
     std::abort();
 }
 
+[[noreturn]] inline void allocation_failure(const char *message = "Allocation failure") noexcept {
+    fatal(message);
+}
+
 [[noreturn]] inline void invalid_pointer_table() noexcept {
     fatal("Invalid pointer table");
 }
@@ -42,7 +46,7 @@ inline void require_initialized(bool initialized) noexcept {
     try {
         throw;
     } catch (const std::bad_alloc &) {
-        fatal("Allocation failure");
+        allocation_failure();
     } catch (...) {
         fatal("Internal GC failure");
     }

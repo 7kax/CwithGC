@@ -41,7 +41,7 @@ class RefCountState {
         size_t alloc_size;
         if (!gc_layout::block_size<ObjectHeader>(size, alloc_size) || alloc_size > heap_capacity ||
             alloc_size > free_bytes_)
-            gc_allocation_failure();
+            gc_runtime::allocation_failure();
 
         auto block = gc_runtime::malloc_bytes<ObjectHeader>(alloc_size);
         block->pointer_table = nullptr;
@@ -215,10 +215,6 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) noexcep
     state.register_object(object, pointer_table);
 } catch (...) {
     gc_runtime::handle_current_exception();
-}
-
-void gc_allocation_failure(void) noexcept {
-    gc_runtime::fatal("Allocation failure");
 }
 
 void gc_collect(void) noexcept {

@@ -16,17 +16,17 @@ set(GC_ALGORITHMS
     ref_count
 )
 
-# Compile and link the public API from strict C11 and C++20 callers.
+# Compile and link the runtime ABI from strict C11 and C++20 instrumentation-shaped inputs.
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
-    set(C_SMOKE_TARGET ${GC_ALGORITHM}_c_api_smoke)
-    add_executable(${C_SMOKE_TARGET} c_api_smoke.c)
+    set(C_SMOKE_TARGET ${GC_ALGORITHM}_c_runtime_abi_smoke)
+    add_executable(${C_SMOKE_TARGET} c_runtime_abi_smoke.c)
     target_link_libraries(${C_SMOKE_TARGET} PRIVATE gc_${GC_ALGORITHM})
     gc_apply_build_options(${C_SMOKE_TARGET})
     set_target_properties(${C_SMOKE_TARGET} PROPERTIES C_EXTENSIONS OFF)
     add_test(NAME ${C_SMOKE_TARGET} COMMAND ${C_SMOKE_TARGET})
 
-    set(CPP_SMOKE_TARGET ${GC_ALGORITHM}_cpp_api_smoke)
-    add_executable(${CPP_SMOKE_TARGET} cpp_api_smoke.cpp)
+    set(CPP_SMOKE_TARGET ${GC_ALGORITHM}_cpp_runtime_abi_smoke)
+    add_executable(${CPP_SMOKE_TARGET} cpp_runtime_abi_smoke.cpp)
     target_link_libraries(${CPP_SMOKE_TARGET} PRIVATE gc_${GC_ALGORITHM})
     gc_apply_build_options(${CPP_SMOKE_TARGET})
     set_target_properties(${CPP_SMOKE_TARGET} PROPERTIES CXX_EXTENSIONS OFF)

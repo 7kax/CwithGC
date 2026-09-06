@@ -6,9 +6,9 @@
 - **P1**: API safety, portability, or resource-management issues
 - **P2**: Testing, build, and maintainability improvements
 
-## Architecture Direction: C API with a C++20 Implementation
+## Architecture Direction: Compiler/Instrumentation C ABI with a C++20 Implementation
 
-- Keep `include/gc.h` as the C11 core interface and `include/gc_debug.h` as the stable optional inspection interface. Keep tests in C to continuously verify the real C ABI.
+- Keep `include/gc.h` as the C11 ABI boundary consumed by compiler-generated or compiler-inserted instrumentation, not as a manually called application API. Keep `include/gc_debug.h` as the stable optional inspection interface, and keep C/C++ runtime-ABI smoke tests to verify the real boundary.
 - Implement internals under `src/` in C++20, using RAII, standard containers, templates, and type-safe helper abstractions where they improve readability.
 - Do not expose STL types, templates, references, exceptions, or other C++ types through the public ABI. Exceptions must never cross an `extern "C"` boundary.
 
@@ -23,7 +23,11 @@
 | [x] | 3 | P2 | common | Extract shared `RootSet`, memory-layout, pointer-table validation, and fatal-error components | All three implementations reuse the same foundation; duplicate logic is removed without changing collector semantics |
 | [x] | 3 | P2 | all | Replace raw integer address arithmetic and repeated casts with `std::byte`, checked ranges, and small helper types | Core scanning code directly expresses blocks, payloads, and field slots; bounds checks are centralized and pointer arithmetic has no undefined behavior |
 | [x] | 4 | P2 | collectors | Refactor collectors one at a time in the order `ref_count` -> `copying` -> `mark_sweep` | Each step is an independently reviewable commit; focused tests, the full suite, and sanitizers pass |
-| [x] | 4 | P2 | CMake / CI | Add C ABI smoke tests, strict warnings, clang-format checks, and sanitizer checks | C and C++ callers are covered by automated tests; new code passes formatting and the agreed warning/sanitizer configurations |
+| [x] | 4 | P2 | CMake / CI | Add C ABI smoke tests, strict warnings, clang-format checks, and sanitizer checks | C and C++ runtime-ABI smoke inputs are covered by automated tests; new code passes formatting and the agreed warning/sanitizer configurations |
+
+## Future Work
+
+- [ ] **P2 | compiler/instrumentation**: Add an in-repo automatic instrumentation pass that lowers managed allocations, pointer updates, and local-root scopes to the `gc.h` runtime ABI. A checked-in tool should transform a supported input program and produce generated code that exercises the runtime ABI without hand-written GC calls.
 
 ## Core Correctness
 

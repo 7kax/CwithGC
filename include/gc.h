@@ -12,23 +12,29 @@ extern "C" {
 #include <stdint.h>
 
 /*
- * Runtime contract:
+ * Compiler/instrumentation ABI contract:
+ *
+ * This is a low-level ABI for compiler-generated calls and compiler-inserted
+ * instrumentation. It is not a general-purpose application allocation API.
+ * A language runtime or instrumentation pass lowers managed allocations,
+ * pointer updates, and local-root lifetimes to these operations.
  *
  * - The process has one collector instance. It is single-threaded and is not
- *   thread-safe; callers must serialize every operation on the instance.
+ *   thread-safe; generated code and runtime integration must serialize every
+ *   operation on the instance.
  * - Except for the explicitly lifecycle-independent functions below, runtime
  *   operations require a successful gc_init() and an active runtime.
  * - gc_init() may restart an existing runtime. Restarting releases the old
  *   collector state and invalidates every old managed pointer and scope token.
  * - gc_cleanup() is idempotent. It releases all managed memory and invalidates
- *   every managed pointer, root, and scope token. Call gc_init() before using
- *   the runtime again.
+ *   every managed pointer, root, and scope token. Instrumented program teardown
+ *   must complete before the runtime is initialized again.
  *
  * C ABI failure behavior: exported functions never propagate C++ exceptions.
  * Allocation failures, unexpected internal exceptions, and checked contract
  * violations print a diagnostic to stderr and abort. Pointer and storage
- * lifetime requirements documented below are caller obligations and cannot all
- * be validated by the runtime; violating one is invalid behavior.
+ * lifetime requirements documented below are instrumentation obligations and
+ * cannot all be validated by the runtime; violating one is invalid behavior.
  */
 
 // Opaque description of pointer fields in a struct or an array of structs.
@@ -38,7 +44,7 @@ typedef struct gc_ptr_table gc_ptr_table;
 typedef uint64_t gc_scope_token;
 
 /**
- * @brief Create an immutable pointer table.
+ * @brief Create immutable pointer metadata for instrumented objects.
  *
  * The pointer_field_offsets array is copied. Every offset must name a complete,
  * naturally aligned pointer field inside a struct of struct_size bytes. For an
@@ -47,11 +53,11 @@ typedef uint64_t gc_scope_token;
  * Invalid input and allocation failure terminate the process according to the
  * C ABI failure contract.
  *
- * A table may be shared by any number of registered objects. It must remain
- * alive until those objects can no longer be visited by the collector. The
- * simplest valid lifetime is to destroy tables after gc_cleanup(). This
- * function is independent of the collector lifecycle and does not require
- * gc_init().
+ * A table may be shared by any number of registered objects. Compiler-generated
+ * metadata must remain alive until those objects can no longer be visited by
+ * the collector. The simplest valid lifetime is to destroy tables after
+ * gc_cleanup(). This function is independent of the collector lifecycle and
+ * does not require gc_init().
  *
  * @param array_len Number of consecutive structs described by the table.
  * @param struct_size Size of one struct in bytes.
@@ -63,7 +69,7 @@ gc_ptr_table *gc_ptr_table_create(size_t array_len, size_t struct_size, size_t n
                                   const size_t *pointer_field_offsets) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Destroy a pointer table created by gc_ptr_table_create().
+ * @brief Destroy compiler-generated pointer metadata.
  *
  * Passing null is allowed. Destroying a table still referenced by a registered
  * object is invalid. This function is independent of the collector lifecycle;
@@ -72,30 +78,31 @@ gc_ptr_table *gc_ptr_table_create(size_t array_len, size_t struct_size, size_t n
 void gc_ptr_table_destroy(gc_ptr_table *table) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Initialize or restart the garbage collector.
+ * @brief Initialize or restart the garbage-collection runtime.
  *
- * A repeated call is a restart, not a no-op: all allocations and roots from
- * the previous runtime are released. Pointers into those allocations and
- * tokens returned by previous gc_scope_begin() calls become invalid. A failed
- * initialization terminates the process according to the C ABI failure
- * contract.
+ * The generated program-start sequence must invoke this before any other
+ * lifecycle-dependent ABI operation. A repeated call is a restart, not a
+ * no-op: all allocations and roots from the previous runtime are released.
+ * Pointers into those allocations and tokens returned by previous
+ * gc_scope_begin() calls become invalid. A failed initialization terminates
+ * the process according to the C ABI failure contract.
  */
 void gc_init(void) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Begin a local-root scope.
+ * @brief Begin a compiler-instrumented local-root scope.
  *
- * Every call to gc_scope_add_root() must occur between a matching begin/end pair.
- * Scopes nest, and scope tokens must be ended in reverse order. The storage
- * for every root slot added to a scope must remain alive and at the same
- * address until that scope ends.
+ * Instrumentation must emit gc_scope_add_root() calls between a matching
+ * begin/end pair. Scopes nest, and scope tokens must be ended in reverse
+ * order. The storage for every root slot added to a scope must remain alive
+ * and at the same address until that scope ends.
  *
  * @return A token identifying the newly active scope.
  */
 gc_scope_token gc_scope_begin(void) CWITHGC_NOEXCEPT;
 
 /**
- * @brief End a local-root scope.
+ * @brief End a compiler-instrumented local-root scope.
  *
  * The token must identify the innermost active scope. Ending an unknown or
  * out-of-order token terminates the process according to the C ABI failure
@@ -105,12 +112,12 @@ gc_scope_token gc_scope_begin(void) CWITHGC_NOEXCEPT;
 void gc_scope_end(gc_scope_token token) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Allocate a zero-initialized managed payload.
+ * @brief Allocate a zero-initialized payload for instrumented code.
  *
  * The returned address points to the payload, not collector metadata. The
  * payload is zero-initialized for the requested number of bytes. It is owned
- * by the collector and must not be passed to free(). The allocation is not a
- * root: protect the pointer with gc_scope_add_root() or store it in a registered
+ * by the collector and must not be passed to free(). The generated code must
+ * protect the pointer with gc_scope_add_root() or store it in a registered
  * pointer field before another allocation or collection can occur.
  *
  * Requests that cannot be represented or do not fit in the collector heap
@@ -122,11 +129,11 @@ void gc_scope_end(gc_scope_token token) CWITHGC_NOEXCEPT;
 void *gc_malloc(size_t size) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Add a pointer slot to the active root scope.
+ * @brief Register an instrumented local pointer slot with the active scope.
  *
  * root_slot must point to writable, naturally aligned pointer storage whose
- * lifetime extends through gc_scope_end(). The slot is set to
- * null immediately, so register it before assigning a managed pointer. The
+ * lifetime extends through gc_scope_end(). The slot is set to null immediately,
+ * so instrumentation must register it before assigning a managed pointer. The
  * runtime updates registered slots when a moving collector relocates objects.
  * An active scope is required. The slot itself does not become a managed
  * allocation and must not be registered more than once for the same scope.
@@ -136,13 +143,14 @@ void *gc_malloc(size_t size) CWITHGC_NOEXCEPT;
 void gc_scope_add_root(void *root_slot) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Associate a pointer table with a managed payload.
+ * @brief Attach compiler-generated pointer metadata to a managed payload.
  *
  * object must be the exact payload address returned by gc_malloc(). pointer_table
  * must be a table created by gc_ptr_table_create(), and that table must remain
  * alive for as long as the object can be visited by the collector. Register an
- * object at most once. Registration does not root the object; retain it in a
- * root slot or another registered pointer field before a collection.
+ * object at most once. Registration does not root the object; generated code
+ * must retain it in a root slot or another registered pointer field before a
+ * collection.
  *
  * @param object Exact managed payload address.
  * @param pointer_table Immutable table describing the payload's pointer fields.
@@ -150,7 +158,7 @@ void gc_scope_add_root(void *root_slot) CWITHGC_NOEXCEPT;
 void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Assign one managed pointer slot through the collector.
+ * @brief Record an instrumented managed-pointer assignment.
  *
  * destination_slot must identify either a root slot previously added with
  * gc_scope_add_root() or a pointer field inside a registered payload, and the field
@@ -158,8 +166,9 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC
  * pointer to a currently live managed payload (an address returned by
  * gc_malloc() or written by the collector into a registered slot). Every
  * assignment, replacement, and clearing of a managed pointer must use this
- * function; direct C assignment bypasses reference-count bookkeeping and
- * violates the collector-independent pointer-assignment contract.
+ * function; direct assignment by generated code bypasses reference-count
+ * bookkeeping and violates the collector-independent pointer-assignment
+ * contract.
  *
  * For the copying collector, only registered roots and fields are rewritten
  * when an object moves. Unregistered aliases can therefore become stale after
@@ -171,7 +180,7 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC
 void gc_pointer_assign(void *destination_slot, void *source) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Run the collector's collection operation.
+ * @brief Run the collector's operation requested by instrumented code.
  *
  * The reference-counting collector reclaims objects as their counts reach
  * zero, so this operation does not perform a tracing pass. Unreachable
@@ -184,22 +193,16 @@ void gc_pointer_assign(void *destination_slot, void *source) CWITHGC_NOEXCEPT;
 void gc_collect(void) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Release the collector runtime and all managed memory.
+ * @brief Release the runtime during instrumented program teardown.
  *
  * This function is idempotent and does not require a prior gc_init(). It
  * releases all managed allocations and active root scopes. Every pointer into
- * a managed allocation, including pointers held in caller-owned fields, is
- * invalid after this call; do not dereference, copy, or pass one to another GC
- * API. Call gc_init() before any further runtime operation.
+ * a managed allocation, including pointers held in instrumented program
+ * fields, is invalid after this call; generated code must not dereference,
+ * copy, or pass one to another GC ABI operation. A subsequent generated
+ * startup sequence must invoke gc_init() before any further runtime operation.
  */
 void gc_cleanup(void) CWITHGC_NOEXCEPT;
-
-/**
- * @brief Report an allocation failure and terminate.
- *
- * This function does not return and is normally used by collector internals.
- */
-void gc_allocation_failure(void) CWITHGC_NOEXCEPT;
 
 #ifdef __cplusplus
 }

@@ -153,14 +153,14 @@ class MarkSweepState {
         size_t requested_size;
         if (!gc_layout::block_size<ObjectHeader>(size, requested_size) ||
             requested_size > heap_capacity)
-            gc_allocation_failure();
+            gc_runtime::allocation_failure();
 
         std::optional<FreeList::Allocation> allocation = free_list_.allocate(requested_size);
         if (!allocation.has_value()) {
             collect();
             allocation = free_list_.allocate(requested_size);
             if (!allocation.has_value())
-                gc_allocation_failure();
+                gc_runtime::allocation_failure();
         }
 
         auto *block = reinterpret_cast<ObjectHeader *>(allocation->memory);
@@ -360,10 +360,6 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) noexcep
     state.register_object(object, pointer_table);
 } catch (...) {
     gc_runtime::handle_current_exception();
-}
-
-void gc_allocation_failure(void) noexcept {
-    gc_runtime::fatal("Allocation failed");
 }
 
 void gc_collect(void) noexcept {

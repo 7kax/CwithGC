@@ -1,7 +1,7 @@
 # CwithGC
 
-CwithGC is a small garbage-collection runtime with a C11 API and C++20 implementations of
-reference-counting, copying, and mark-and-sweep collectors.
+CwithGC is a small garbage-collection runtime. Its C11 compiler/instrumentation ABI is implemented
+in C++20 with reference-counting, copying, and mark-and-sweep collectors.
 
 ## Build and Test
 
@@ -43,47 +43,52 @@ cmake --preset library
 cmake --build --preset library
 ```
 
-## C API Contract
+## Compiler/Instrumentation ABI
 
-The core public interface is C11 (`include/gc.h`); the implementation is C++20. One process-global
-collector instance is provided. The collector is single-threaded and not thread-safe, so callers
-must serialize initialization, allocation, root management, pointer assignment, collection, and
-cleanup.
+The core runtime interface is a low-level C ABI (`include/gc.h`) between compiler-generated code (or
+compiler-inserted instrumentation) and the runtime. It is not a general-purpose application
+allocation API. A language implementation or instrumentation pass lowers managed allocation,
+pointer-field updates, and local-root lifetimes to these ABI operations; application source should
+not call them directly as a memory-management layer.
 
-Call `gc_init()` before using the runtime. Calling it again restarts the runtime and invalidates all
-previous managed pointers and scope tokens. `gc_cleanup()` is safe to call repeatedly, releases all
-managed memory, and invalidates every managed pointer and active root. Call `gc_init()` again before
-any further runtime operation. Pointer-table creation and destruction are independent of this
-lifecycle, but a table must remain alive while a registered object can be visited.
+The runtime provides one process-global collector instance. It is single-threaded and not
+thread-safe, so generated code and runtime integration must serialize initialization, allocation,
+root management, pointer assignment, collection, and teardown. The generated program-start sequence
+must invoke `gc_init()` before lifecycle-dependent operations. A repeated `gc_init()` restarts the
+runtime, releasing the old state and invalidating its managed pointers and scope tokens.
+`gc_cleanup()` is idempotent, releases all managed memory and active roots, and invalidates every
+managed pointer. A subsequent generated execution must initialize the runtime again before using it.
+Pointer-table creation and destruction are independent of this lifecycle, but compiler-generated
+metadata must remain alive while a registered object can be visited.
 
-Use explicit root scopes for local pointer storage. A scope is ended in LIFO order, and each root
-slot must remain at the same address until its scope ends. `gc_scope_add_root()` clears the slot when
-it registers it. Use `gc_pointer_assign()` for every managed-pointer assignment, including pointer fields
-described by a registered table; direct assignment bypasses collector bookkeeping. In the copying
-collector, only registered roots and fields are updated when objects move.
+The following shows the shape of calls emitted around one instrumented local; it is an ABI smoke
+sequence, not application code. Generated code opens and closes scopes in LIFO order, registers
+each pointer slot before storing a managed pointer, and routes every managed-pointer assignment
+through `gc_pointer_assign()`. For the copying collector, only registered roots and fields are
+updated when objects move.
 
 ```c
 #include "gc.h"
 
-int main(void) {
+void instrumented_entry(void) {
+    /* Emitted program-start and local-scope instrumentation. */
     gc_init();
-
     gc_scope_token scope = gc_scope_begin();
-    int *value = NULL;
-    gc_scope_add_root((void **)&value);
-    gc_pointer_assign((void **)&value, gc_malloc(sizeof(*value)));
-    *value = 42;
+    void *slot = NULL;
+    gc_scope_add_root(&slot);
+    gc_pointer_assign(&slot, gc_malloc(32));
 
+    /* An instrumentation/runtime collection point. */
     gc_collect();
+
     gc_scope_end(scope);
     gc_cleanup();
-    return 0;
 }
 ```
 
 The C ABI does not expose C++ exceptions. Allocation failures, unexpected internal failures, and
 checked contract violations print a diagnostic and abort. Pointer and storage lifetime requirements
-remain caller obligations.
+remain obligations of the compiler or instrumentation that emits these calls.
 
 ## Inspection API
 

@@ -94,12 +94,12 @@ class CopyingState {
 
         size_t alloc_size;
         if (!gc_layout::block_size<ObjectHeader>(size, alloc_size) || alloc_size > heap_capacity)
-            gc_allocation_failure();
+            gc_runtime::allocation_failure();
 
         if (alloc_size > from_space_.available())
             collect();
         if (alloc_size > from_space_.available())
-            gc_allocation_failure();
+            gc_runtime::allocation_failure();
 
         auto *block = reinterpret_cast<ObjectHeader *>(from_space_.allocate(alloc_size));
 
@@ -306,10 +306,6 @@ void gc_collect(void) noexcept {
 
 void gc_cleanup(void) noexcept {
     state.cleanup();
-}
-
-void gc_allocation_failure(void) noexcept {
-    gc_runtime::fatal("Allocation failure");
 }
 
 int gc_debug_is_available(void) noexcept {
