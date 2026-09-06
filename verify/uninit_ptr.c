@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-struct foo {
-    int *a;
-    int *b;
+struct pointer_pair {
+    int *first;
+    int *second;
 };
 
 int main(void) {
@@ -17,21 +17,21 @@ int main(void) {
     int *ptr1 = (int *)(uintptr_t)0xff;
     int *ptr2 = (int *)(uintptr_t)0xff;
     int *ptr3 = (int *)(uintptr_t)0xff;
-    gc_local_var(&ptr1);
-    gc_local_var(&ptr2);
-    gc_local_var(&ptr3);
+    gc_scope_add_root(&ptr1);
+    gc_scope_add_root(&ptr2);
+    gc_scope_add_root(&ptr3);
 
     assert(ptr1 == NULL);
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
 
     // Pointer fields in a local structure that simulate uninitialized state.
-    struct foo f = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
-    gc_local_var(&f.a);
-    gc_local_var(&f.b);
+    struct pointer_pair pair = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
+    gc_scope_add_root(&pair.first);
+    gc_scope_add_root(&pair.second);
 
-    assert(f.a == NULL);
-    assert(f.b == NULL);
+    assert(pair.first == NULL);
+    assert(pair.second == NULL);
 
     gc_scope_end(scope);
 

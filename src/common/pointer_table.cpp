@@ -10,9 +10,10 @@
 namespace {
 
 bool valid_pointer_offsets(std::size_t struct_size, std::size_t num_pointers,
-                           const std::size_t *positions) noexcept {
+                           const std::size_t *pointer_field_offsets) noexcept {
     for (std::size_t i = 0; i < num_pointers; ++i) {
-        if (positions[i] > struct_size - sizeof(void *) || positions[i] % alignof(void *) != 0)
+        if (pointer_field_offsets[i] > struct_size - sizeof(void *) ||
+            pointer_field_offsets[i] % alignof(void *) != 0)
             return false;
     }
     return true;
@@ -23,20 +24,21 @@ bool valid_pointer_offsets(std::size_t struct_size, std::size_t num_pointers,
 namespace gc_pointer_table {
 
 bool valid_shape(std::size_t array_len, std::size_t struct_size, std::size_t num_pointers,
-                 const std::size_t *positions) noexcept {
-    if (array_len == 0 || struct_size == 0 || num_pointers == 0 || positions == nullptr ||
+                 const std::size_t *pointer_field_offsets) noexcept {
+    if (array_len == 0 || struct_size == 0 || num_pointers == 0 ||
+        pointer_field_offsets == nullptr ||
         num_pointers > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()) /
                            sizeof(std::size_t) ||
         !gc_layout::multiplication_fits(array_len, struct_size) || struct_size < sizeof(void *) ||
         (array_len > 1 && struct_size % alignof(void *) != 0))
         return false;
 
-    return valid_pointer_offsets(struct_size, num_pointers, positions);
+    return valid_pointer_offsets(struct_size, num_pointers, pointer_field_offsets);
 }
 
 bool valid_for_payload(const gc_ptr_table &table, std::size_t payload_capacity) noexcept {
-    if (!valid_shape(table.array_len, table.struct_size, table.positions.size(),
-                     table.positions.data()))
+    if (!valid_shape(table.array_len, table.struct_size, table.field_offsets.size(),
+                     table.field_offsets.data()))
         return false;
 
     std::size_t payload_size;
@@ -49,16 +51,16 @@ bool valid_for_payload(const gc_ptr_table &table, std::size_t payload_capacity) 
 extern "C" {
 
 gc_ptr_table *gc_ptr_table_create(size_t array_len, size_t struct_size, size_t num_pointers,
-                                  const size_t *positions) noexcept try {
-    if (!gc_pointer_table::valid_shape(array_len, struct_size, num_pointers, positions))
+                                  const size_t *pointer_field_offsets) noexcept try {
+    if (!gc_pointer_table::valid_shape(array_len, struct_size, num_pointers, pointer_field_offsets))
         gc_runtime::invalid_pointer_table();
 
-    std::vector<std::size_t> copied_positions;
-    copied_positions.reserve(num_pointers);
+    std::vector<std::size_t> field_offsets;
+    field_offsets.reserve(num_pointers);
     for (std::size_t i = 0; i < num_pointers; ++i)
-        copied_positions.push_back(positions[i]);
+        field_offsets.push_back(pointer_field_offsets[i]);
 
-    return new gc_ptr_table{array_len, struct_size, std::move(copied_positions)};
+    return new gc_ptr_table{array_len, struct_size, std::move(field_offsets)};
 } catch (...) {
     gc_runtime::handle_current_exception();
 }

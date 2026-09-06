@@ -30,24 +30,24 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     // Read the current free-space size.
-    size_t free_size = test_gc_free_bytes();
+    size_t free_bytes = test_gc_free_bytes();
 
     // Define a pointer for the allocated memory.
     void *ptr;
-    gc_local_var(&ptr);
+    gc_scope_add_root(&ptr);
 
     // Allocate some memory first to confirm that the collector works normally.
-    ptr = gc_malloc(free_size / 4);
+    ptr = gc_malloc(free_bytes / 4);
     assert(ptr != NULL);
 
     // Trigger one garbage collection.
     gc_collect();
 
     // Refresh the free-space size.
-    free_size = test_gc_free_bytes();
+    free_bytes = test_gc_free_bytes();
 
     // Request twice the available space, which should fail and call std::abort.
-    ptr = gc_malloc(free_size * 2);
+    ptr = gc_malloc(free_bytes * 2);
 
     // Reaching this point means the library did not abort after allocation failure.
 

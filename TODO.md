@@ -30,11 +30,11 @@
 | Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
 | [x] | P0 | copying | After copying an object, update every pointer inside the to-space object instead of modifying the from-space source | Nested objects, linked lists, and trees contain only pointers into the new space after GC; repeated collections continue to pass |
-| [x] | P0 | ref_count | Fix the use-after-free caused by reading `meta_ptr->size` after freeing metadata | `ref_count_basic` and `ref_count_recursion` report no UAF under ASan |
+| [x] | P0 | ref_count | Fix the use-after-free caused by reading `header->size` after freeing metadata | `ref_count_basic` and `ref_count_recursion` report no UAF under ASan |
 | [x] | P0 | all | Apply maximum alignment to every allocation block and standardize metadata, payload, and free-block address calculations | UBSan alignment checks report no errors; objects of varying sizes can be allocated safely |
 | [x] | P0 | mark_sweep | Handle `free_list == nullptr` correctly so sweep does not assert when the heap is full or has no free blocks | Calling `gc_collect()` after filling the heap does not crash; allocation failure follows the common failure path |
-| [x] | P0 | ref_count | Handle self-assignment and release ordering in `gc_ptr_copy(dst, src)` so the old reference is not released before the new one is retained | `gc_ptr_copy(&p, p)`, aliased assignments, and field replacements are safe under ASan |
-| [x] | P0 | all | Check integer overflow in `size + sizeof(meta_data)` and pointer-table size calculations | Oversized requests are rejected instead of wrapping to a small allocation and writing out of bounds |
+| [x] | P0 | ref_count | Handle self-assignment and release ordering in `gc_pointer_assign(destination_slot, source)` so the old reference is not released before the new one is retained | `gc_pointer_assign(&p, p)`, aliased assignments, and field replacements are safe under ASan |
+| [x] | P0 | all | Check integer overflow in `size + sizeof(ObjectHeader)` and pointer-table size calculations | Oversized requests are rejected instead of wrapping to a small allocation and writing out of bounds |
 
 ## Lifecycle and API
 
@@ -42,10 +42,10 @@
 | --- | --- | --- | --- | --- |
 | [x] | P1 | all | Add initialization-state checks to `gc_init()`, `gc_collect()`, `gc_malloc()`, and `gc_cleanup()`, including repeated initialization | Calls before initialization, repeated initialization, and calls after cleanup all have defined behavior |
 | [x] | P1 | all | Use explicit scope tokens for root lifetime management | All roots are attached to explicit nested scopes, and behavior is stable under optimized builds, different compilers, and recursive calls |
-| [x] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
+| [x] | P1 | all | Define ownership and call requirements for `gc_scope_add_root()` and `gc_pointer_assign()` | Documentation states which pointers must be registered and which fields must be updated through `gc_pointer_assign()` |
 | [x] | P1 | ref_count | Make `gc_cleanup()` release live objects, or explicitly require callers to release every reference first | LeakSanitizer reports no remaining GC objects; state is consistent after cleanup |
 | [x] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |
-| [x] | P1 | all | Validate pointer-table ranges, offsets, array lengths, and object payload sizes in `gc_register()` | Invalid pointer tables are rejected and cannot cause out-of-bounds access during mark, copy, or decrement operations |
+| [x] | P1 | all | Validate pointer-table ranges, offsets, array lengths, and object payload sizes in `gc_register_object()` | Invalid pointer tables are rejected and cannot cause out-of-bounds access during mark, copy, or decrement operations |
 | [x] | P1 | all | Define pointer-table ownership and lifetime so metadata cannot retain dangling table pointers | A pointer table remains valid for the object's lifetime and does not leak auxiliary memory |
 
 ## Memory Layout and Portability
@@ -53,7 +53,7 @@
 | Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
 | [x] | P1 | gc.h / all | Replace `u_int8_t` and `u_int64_t` with standard types and avoid representing pointer arithmetic directly as integers | Use `uint8_t`, `uintptr_t`, or standard byte-pointer arithmetic |
-| [x] | P1 | gc.h | Redesign `positions[0]` to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
+| [x] | P1 | gc.h | Redesign the first pointer-field offset to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
 | [x] | P1 | all | Avoid integer comparisons and arithmetic on object pointers; use safe byte pointers and bounds checks consistently | Behavior is defined under UBSan, strict compilers, and 32-bit and 64-bit environments |
 | [x] | P1 | debug API | Standardize allocation and deallocation for memory-layout snapshots | Snapshots carry an explicit block count and are cleared by `gc_debug_memory_layout_dispose()`; ASan reports no allocation/deallocation mismatch |
 | [x] | P1 | ref_count | Implement memory inspection as a live-allocation snapshot | The API documents noncontiguous allocation and free-capacity semantics; generic inspection code can consume and release the snapshot safely |
@@ -77,6 +77,7 @@
 | [x] | P2 | debug API / CMake | Replace the public `GC_DEBUG` macro contract with a stable optional inspection API | `gc_debug.h` is always usable; `GC_ENABLE_INSPECTION` is private to the library build, and disabled builds return explicit status codes |
 | [x] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
 | [x] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | The `quality-check` target runs formatting and language checks automatically |
+| [x] | P2 | all | Align public C API, inspection statistics, and private C++ type names with their semantics | Public operations use precise names, collector statistics distinguish reclaimed and relocated blocks, and internal types follow one naming convention |
 
 ## Current Validation Baseline
 

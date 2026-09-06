@@ -18,21 +18,21 @@
 
 namespace {
 
-constexpr size_t heap_size = 4 * 1024;
+constexpr size_t heap_capacity = 4 * 1024;
 
-struct free_block {
+struct FreeBlock {
     size_t size;
-    free_block *next;
+    FreeBlock *next;
 };
 
-struct meta_data {
+struct ObjectHeader {
     std::uint8_t marked;
-    const gc_ptr_table *ptr_table;
+    const gc_ptr_table *pointer_table;
     size_t size;
 };
 
-static_assert(heap_size % gc_layout::alignment == 0);
-static_assert(gc_layout::alignment >= alignof(free_block));
+static_assert(heap_capacity % gc_layout::alignment == 0);
+static_assert(gc_layout::alignment >= alignof(FreeBlock));
 
 class FreeList {
   public:
@@ -45,24 +45,24 @@ class FreeList {
         assert(memory != nullptr);
         assert(size >= minimum_block_size);
 
-        head_ = reinterpret_cast<free_block *>(memory);
+        head_ = reinterpret_cast<FreeBlock *>(memory);
         head_->size = size;
         head_->next = nullptr;
         tail_ = nullptr;
-        free_size_ = size;
+        free_bytes_ = size;
     }
 
     void clear() noexcept {
         head_ = nullptr;
         tail_ = nullptr;
-        free_size_ = 0;
+        free_bytes_ = 0;
     }
 
     std::optional<Allocation> allocate(size_t size) noexcept {
         assert(size > 0);
 
-        free_block *previous = nullptr;
-        free_block *current = head_;
+        FreeBlock *previous = nullptr;
+        FreeBlock *current = head_;
         while (current != nullptr && current->size < size) {
             previous = current;
             current = current->next;
@@ -74,28 +74,28 @@ class FreeList {
         const size_t remainder = current_size - size;
         if (remainder >= minimum_block_size) {
             auto *next =
-                reinterpret_cast<free_block *>(reinterpret_cast<std::byte *>(current) + size);
+                reinterpret_cast<FreeBlock *>(reinterpret_cast<std::byte *>(current) + size);
             next->size = remainder;
             next->next = current->next;
             replace(previous, next);
 
-            free_size_ -= size;
+            free_bytes_ -= size;
             return Allocation{reinterpret_cast<std::byte *>(current), size};
         }
 
         replace(previous, current->next);
-        free_size_ -= current_size;
+        free_bytes_ -= current_size;
         return Allocation{reinterpret_cast<std::byte *>(current), current_size};
     }
 
-    free_block *head() const noexcept { return head_; }
+    FreeBlock *head() const noexcept { return head_; }
 
-    size_t free_size() const noexcept { return free_size_; }
+    size_t free_bytes() const noexcept { return free_bytes_; }
 
     void begin_rebuild() noexcept {
         head_ = nullptr;
         tail_ = nullptr;
-        free_size_ = 0;
+        free_bytes_ = 0;
     }
 
     void append(std::byte *memory, size_t size) noexcept {
@@ -104,11 +104,11 @@ class FreeList {
 
         if (tail_ != nullptr && reinterpret_cast<std::byte *>(tail_) + tail_->size == memory) {
             tail_->size += size;
-            free_size_ += size;
+            free_bytes_ += size;
             return;
         }
 
-        auto *block = reinterpret_cast<free_block *>(memory);
+        auto *block = reinterpret_cast<FreeBlock *>(memory);
         block->size = size;
         block->next = nullptr;
 
@@ -117,33 +117,33 @@ class FreeList {
         else
             tail_->next = block;
         tail_ = block;
-        free_size_ += size;
+        free_bytes_ += size;
     }
 
   private:
-    static constexpr size_t minimum_block_size = gc_layout::align_up(sizeof(free_block));
+    static constexpr size_t minimum_block_size = gc_layout::align_up(sizeof(FreeBlock));
 
-    void replace(free_block *previous, free_block *replacement) noexcept {
+    void replace(FreeBlock *previous, FreeBlock *replacement) noexcept {
         if (previous == nullptr)
             head_ = replacement;
         else
             previous->next = replacement;
     }
 
-    free_block *head_ = nullptr;
-    free_block *tail_ = nullptr;
-    size_t free_size_ = 0;
+    FreeBlock *head_ = nullptr;
+    FreeBlock *tail_ = nullptr;
+    size_t free_bytes_ = 0;
 };
 
 class MarkSweepState {
   public:
     void init() {
-        auto new_heap = gc_runtime::malloc_bytes(heap_size);
+        auto new_heap = gc_runtime::malloc_bytes(heap_capacity);
 
         roots_.clear();
         heap_ = std::move(new_heap);
-        free_list_.reset(heap_.get(), heap_size);
-        block_collected_ = 0;
+        free_list_.reset(heap_.get(), heap_capacity);
+        reclaimed_block_count_ = 0;
         initialized_ = true;
     }
 
@@ -151,7 +151,8 @@ class MarkSweepState {
         require_initialized();
 
         size_t requested_size;
-        if (!gc_layout::block_size<meta_data>(size, requested_size) || requested_size > heap_size)
+        if (!gc_layout::block_size<ObjectHeader>(size, requested_size) ||
+            requested_size > heap_capacity)
             gc_allocation_failure();
 
         std::optional<FreeList::Allocation> allocation = free_list_.allocate(requested_size);
@@ -162,9 +163,9 @@ class MarkSweepState {
                 gc_allocation_failure();
         }
 
-        auto *block = reinterpret_cast<meta_data *>(allocation->memory);
+        auto *block = reinterpret_cast<ObjectHeader *>(allocation->memory);
 
-        block->ptr_table = nullptr;
+        block->pointer_table = nullptr;
         block->size = allocation->size;
         block->marked = 0;
 
@@ -179,30 +180,30 @@ class MarkSweepState {
         return roots_.begin_scope();
     }
 
-    void add_root(void *ptr_address) {
+    void add_root(void *root_slot) {
         require_initialized();
 
-        roots_.add(ptr_address);
+        roots_.add(root_slot);
     }
 
-    void register_object(void *ptr, const gc_ptr_table *ptr_map) const noexcept {
+    void register_object(void *object, const gc_ptr_table *pointer_table) const noexcept {
         require_initialized();
 
-        meta_data *meta_ptr = get_meta_data(ptr);
-        assert(meta_ptr->ptr_table == nullptr);
+        ObjectHeader *header = get_object_header(object);
+        assert(header->pointer_table == nullptr);
 
         size_t payload_capacity;
-        if (ptr_map == nullptr ||
-            !gc_layout::payload_capacity<meta_data>(meta_ptr->size, payload_capacity) ||
-            !gc_pointer_table::valid_for_payload(*ptr_map, payload_capacity))
+        if (pointer_table == nullptr ||
+            !gc_layout::payload_capacity<ObjectHeader>(header->size, payload_capacity) ||
+            !gc_pointer_table::valid_for_payload(*pointer_table, payload_capacity))
             gc_runtime::invalid_pointer_table();
 
-        meta_ptr->ptr_table = ptr_map;
+        header->pointer_table = pointer_table;
     }
 
-    void copy_pointer(void *dst_address, void *src) const noexcept {
+    void assign_pointer(void *destination_slot, void *source) const noexcept {
         require_initialized();
-        *static_cast<void **>(dst_address) = src;
+        *static_cast<void **>(destination_slot) = source;
     }
 
     void collect() noexcept {
@@ -219,16 +220,16 @@ class MarkSweepState {
     void cleanup() noexcept {
         heap_.reset();
         free_list_.clear();
-        block_collected_ = 0;
+        reclaimed_block_count_ = 0;
         roots_.clear();
         initialized_ = false;
     }
 
-    size_t free_size() const noexcept { return free_list_.free_size(); }
+    size_t free_bytes() const noexcept { return free_list_.free_bytes(); }
 
-    size_t block_collected() const noexcept { return block_collected_; }
+    size_t reclaimed_block_count() const noexcept { return reclaimed_block_count_; }
 
-    size_t root_size() const noexcept { return roots_.size(); }
+    size_t root_count() const noexcept { return roots_.size(); }
 
     bool initialized() const noexcept { return initialized_; }
 
@@ -236,10 +237,10 @@ class MarkSweepState {
     gc_debug_memory_layout memory_layout() const {
         require_initialized();
 
-        gc_layout::layout_builder layout;
-        std::byte *heap_end = heap_.get() + heap_size;
+        gc_layout::LayoutBuilder layout;
+        std::byte *heap_end = heap_.get() + heap_capacity;
         std::byte *scanning = heap_.get();
-        free_block *next_free_block = free_list_.head();
+        FreeBlock *next_free_block = free_list_.head();
 
         while (scanning < heap_end) {
             if (next_free_block != nullptr &&
@@ -249,33 +250,33 @@ class MarkSweepState {
                 scanning += size;
                 next_free_block = next_free_block->next;
             } else {
-                auto *meta_ptr = reinterpret_cast<meta_data *>(scanning);
-                layout.add(scanning, meta_ptr->size, GC_DEBUG_BLOCK_ALLOCATED);
-                scanning += meta_ptr->size;
+                auto *header = reinterpret_cast<ObjectHeader *>(scanning);
+                layout.add(scanning, header->size, GC_DEBUG_BLOCK_ALLOCATED);
+                scanning += header->size;
             }
         }
 
-        return layout.release();
+        return layout.build();
     }
 #endif
 
   private:
-    static meta_data *get_meta_data(void *ptr) noexcept {
-        return gc_layout::metadata<meta_data>(ptr);
+    static ObjectHeader *get_object_header(void *object) noexcept {
+        return gc_layout::metadata<ObjectHeader>(object);
     }
 
     void require_initialized() const noexcept { gc_runtime::require_initialized(initialized_); }
 
     void mark(void *ptr) noexcept {
-        meta_data *meta_ptr = get_meta_data(ptr);
-        if (meta_ptr->marked)
+        ObjectHeader *header = get_object_header(ptr);
+        if (header->marked)
             return;
 
-        meta_ptr->marked = 1;
-        if (meta_ptr->ptr_table == nullptr)
+        header->marked = 1;
+        if (header->pointer_table == nullptr)
             return;
 
-        gc_pointer_table::for_each_field(*meta_ptr->ptr_table, ptr,
+        gc_pointer_table::for_each_field(*header->pointer_table, ptr,
                                          [this](void **child_ptr) noexcept {
                                              if (*child_ptr != nullptr)
                                                  mark(*child_ptr);
@@ -283,23 +284,23 @@ class MarkSweepState {
     }
 
     void mark_phase() noexcept {
-        roots_.for_each([this](void **ptr) noexcept {
-            if (*ptr != nullptr)
-                mark(*ptr);
+        roots_.for_each([this](void **root_slot) noexcept {
+            if (*root_slot != nullptr)
+                mark(*root_slot);
         });
     }
 
     void sweep_phase() noexcept {
-        std::byte *heap_end = heap_.get() + heap_size;
+        std::byte *heap_end = heap_.get() + heap_capacity;
         std::byte *sweeping = heap_.get();
-        free_block *next_free_block = free_list_.head();
+        FreeBlock *next_free_block = free_list_.head();
         free_list_.begin_rebuild();
 
         while (sweeping < heap_end) {
             if (next_free_block != nullptr &&
                 sweeping == reinterpret_cast<std::byte *>(next_free_block)) {
                 const size_t block_size = next_free_block->size;
-                free_block *following_free_block = next_free_block->next;
+                FreeBlock *following_free_block = next_free_block->next;
                 free_list_.append(sweeping, block_size);
                 sweeping += block_size;
                 next_free_block = following_free_block;
@@ -308,14 +309,14 @@ class MarkSweepState {
 
             assert(next_free_block == nullptr ||
                    sweeping < reinterpret_cast<std::byte *>(next_free_block));
-            auto *meta_ptr = reinterpret_cast<meta_data *>(sweeping);
-            const size_t block_size = meta_ptr->size;
+            auto *header = reinterpret_cast<ObjectHeader *>(sweeping);
+            const size_t block_size = header->size;
 
-            if (meta_ptr->marked == 0) {
+            if (header->marked == 0) {
                 free_list_.append(sweeping, block_size);
-                block_collected_++;
+                reclaimed_block_count_++;
             } else {
-                meta_ptr->marked = 0;
+                header->marked = 0;
             }
 
             sweeping += block_size;
@@ -323,10 +324,10 @@ class MarkSweepState {
     }
 
     bool initialized_ = false;
-    gc_runtime::malloc_ptr<> heap_;
-    gc_runtime::root_set roots_;
+    gc_runtime::MallocPtr<> heap_;
+    gc_runtime::RootSet roots_;
     FreeList free_list_;
-    size_t block_collected_ = 0;
+    size_t reclaimed_block_count_ = 0;
 };
 
 MarkSweepState state;
@@ -351,12 +352,12 @@ void gc_scope_end(gc_scope_token token) noexcept try { state.end_scope(token); }
     gc_runtime::handle_current_exception();
 }
 
-void gc_local_var(void *ptr_address) noexcept try { state.add_root(ptr_address); } catch (...) {
+void gc_scope_add_root(void *root_slot) noexcept try { state.add_root(root_slot); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
-void gc_register(void *ptr, const gc_ptr_table *ptr_map) noexcept try {
-    state.register_object(ptr, ptr_map);
+void gc_register_object(void *object, const gc_ptr_table *pointer_table) noexcept try {
+    state.register_object(object, pointer_table);
 } catch (...) {
     gc_runtime::handle_current_exception();
 }
@@ -373,8 +374,8 @@ void gc_cleanup(void) noexcept {
     state.cleanup();
 }
 
-void gc_ptr_copy(void *dst_address, void *src) noexcept {
-    state.copy_pointer(dst_address, src);
+void gc_pointer_assign(void *destination_slot, void *source) noexcept {
+    state.assign_pointer(destination_slot, source);
 }
 
 int gc_debug_is_available(void) noexcept {
@@ -395,11 +396,12 @@ gc_debug_status gc_debug_get_stats(gc_debug_stats *out) noexcept {
         return GC_DEBUG_NOT_INITIALIZED;
 
     try {
-        out->heap_capacity = heap_size;
-        out->free_bytes = state.free_size();
-        out->reclaimed_blocks = state.block_collected();
-        out->metadata_size = gc_layout::header_size<meta_data>;
-        out->root_count = state.root_size();
+        out->heap_capacity = heap_capacity;
+        out->free_bytes = state.free_bytes();
+        out->reclaimed_block_count = state.reclaimed_block_count();
+        out->relocated_block_count = 0;
+        out->metadata_size = gc_layout::header_size<ObjectHeader>;
+        out->root_count = state.root_count();
         return GC_DEBUG_OK;
     } catch (const std::bad_alloc &) {
         *out = {};

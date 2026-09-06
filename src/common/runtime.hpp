@@ -9,18 +9,18 @@
 
 namespace gc_runtime {
 
-struct free_deleter {
+struct FreeDeleter {
     void operator()(void *ptr) const noexcept { std::free(ptr); }
 };
 
-template <typename T = std::byte> using malloc_ptr = std::unique_ptr<T, free_deleter>;
+template <typename T = std::byte> using MallocPtr = std::unique_ptr<T, FreeDeleter>;
 
-template <typename T = std::byte> malloc_ptr<T> malloc_bytes(std::size_t size) {
+template <typename T = std::byte> MallocPtr<T> malloc_bytes(std::size_t size) {
     void *memory = std::malloc(size);
     if (memory == nullptr)
         throw std::bad_alloc();
 
-    return malloc_ptr<T>(static_cast<T *>(memory));
+    return MallocPtr<T>(static_cast<T *>(memory));
 }
 
 [[noreturn]] inline void fatal(const char *message) noexcept {

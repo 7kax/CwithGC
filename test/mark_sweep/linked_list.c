@@ -10,22 +10,22 @@ struct node {
     struct node *next;
 };
 
-gc_ptr_table *construct_ptr_table(void) {
-    const size_t positions[] = {offsetof(struct node, next)};
-    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, positions);
+gc_ptr_table *create_pointer_table(void) {
+    const size_t pointer_field_offsets[] = {offsetof(struct node, next)};
+    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, pointer_field_offsets);
     assert(table != NULL);
     return table;
 }
 
-gc_ptr_table *ptr_map = NULL;
+gc_ptr_table *pointer_table = NULL;
 
 struct node *make_node(int data) {
     gc_scope_token scope = gc_scope_begin();
     struct node *new_node;
-    gc_local_var(&new_node);
+    gc_scope_add_root(&new_node);
 
-    gc_ptr_copy(&new_node, gc_malloc(sizeof(struct node)));
-    gc_register(new_node, ptr_map);
+    gc_pointer_assign(&new_node, gc_malloc(sizeof(struct node)));
+    gc_register_object(new_node, pointer_table);
 
     new_node->data = data;
 
@@ -37,31 +37,31 @@ struct node *make_node(int data) {
 int main(void) {
     int elements[] = {1, 2, 3, 4, 5};
     const size_t n = 5;
-    ptr_map = construct_ptr_table();
+    pointer_table = create_pointer_table();
 
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
     struct node *head, *cur, *new_node;
-    gc_local_var(&head);
-    gc_local_var(&cur);
-    gc_local_var(&new_node);
+    gc_scope_add_root(&head);
+    gc_scope_add_root(&cur);
+    gc_scope_add_root(&new_node);
 
-    gc_ptr_copy(&head, make_node(elements[0]));
-    gc_ptr_copy(&cur, head);
+    gc_pointer_assign(&head, make_node(elements[0]));
+    gc_pointer_assign(&cur, head);
 
     for (size_t i = 1; i < n; i++) {
-        gc_ptr_copy(&new_node, make_node(elements[i]));
-        gc_ptr_copy(&(cur->next), new_node);
-        gc_ptr_copy(&cur, new_node);
+        gc_pointer_assign(&new_node, make_node(elements[i]));
+        gc_pointer_assign(&(cur->next), new_node);
+        gc_pointer_assign(&cur, new_node);
     }
 
-    gc_ptr_copy(&cur, NULL);
-    gc_ptr_copy(&new_node, NULL);
+    gc_pointer_assign(&cur, NULL);
+    gc_pointer_assign(&new_node, NULL);
 
     for (size_t i = 0; i < n; i++) {
         assert(head->data == elements[i]);
-        gc_ptr_copy((void **)&head, head->next);
+        gc_pointer_assign((void **)&head, head->next);
     }
 
     assert(head == NULL);
@@ -69,11 +69,11 @@ int main(void) {
     assert(new_node == NULL);
 
     gc_collect();
-    assert(test_gc_reclaimed_blocks() == n);
+    assert(test_gc_reclaimed_block_count() == n);
 
     gc_scope_end(scope);
     gc_cleanup();
-    gc_ptr_table_destroy(ptr_map);
+    gc_ptr_table_destroy(pointer_table);
     puts("Mark-sweep linked list test passed!");
 
     return 0;

@@ -9,16 +9,16 @@ static_assert(noexcept(gc_init()));
 static_assert(noexcept(gc_scope_begin()));
 static_assert(noexcept(gc_scope_end(0)));
 static_assert(noexcept(gc_malloc(0)));
-static_assert(noexcept(gc_local_var(nullptr)));
-static_assert(noexcept(gc_register(nullptr, nullptr)));
-static_assert(noexcept(gc_ptr_copy(nullptr, nullptr)));
+static_assert(noexcept(gc_scope_add_root(nullptr)));
+static_assert(noexcept(gc_register_object(nullptr, nullptr)));
+static_assert(noexcept(gc_pointer_assign(nullptr, nullptr)));
 static_assert(noexcept(gc_collect()));
 static_assert(noexcept(gc_cleanup()));
 static_assert(noexcept(gc_allocation_failure()));
 
 int main() {
-    const std::size_t positions[] = {0};
-    auto *table = gc_ptr_table_create(1, sizeof(void *), 1, positions);
+    const std::size_t pointer_field_offsets[] = {0};
+    auto *table = gc_ptr_table_create(1, sizeof(void *), 1, pointer_field_offsets);
     if (table == nullptr)
         return EXIT_FAILURE;
 

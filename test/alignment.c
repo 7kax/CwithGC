@@ -16,8 +16,8 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     for (size_t i = 0; i < count; i++) {
-        gc_local_var(&roots[i]);
-        gc_ptr_copy(&roots[i], gc_malloc(sizes[i]));
+        gc_scope_add_root(&roots[i]);
+        gc_pointer_assign(&roots[i], gc_malloc(sizes[i]));
         assert((uintptr_t)roots[i] % alignment == 0);
 
         if (sizes[i] == sizeof(max_align_t))
@@ -34,16 +34,16 @@ int main(void) {
 
         if (sizes[i] == sizeof(max_align_t))
             *(max_align_t *)roots[i] = (max_align_t){0};
-        gc_ptr_copy(&roots[i], NULL);
+        gc_pointer_assign(&roots[i], NULL);
     }
 
     gc_collect();
     assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
-    gc_ptr_copy(&roots[0], gc_malloc(sizeof(max_align_t)));
+    gc_pointer_assign(&roots[0], gc_malloc(sizeof(max_align_t)));
     assert((uintptr_t)roots[0] % alignment == 0);
     *(max_align_t *)roots[0] = (max_align_t){0};
-    gc_ptr_copy(&roots[0], NULL);
+    gc_pointer_assign(&roots[0], NULL);
     gc_collect();
     assert(test_gc_free_bytes() == test_gc_heap_capacity());
 

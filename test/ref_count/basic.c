@@ -39,23 +39,23 @@ int main(void) {
     gc_init();
 
     const size_t int_block_size = test_gc_block_size(sizeof(int));
-    const size_t heap_size = test_gc_heap_capacity();
+    const size_t heap_capacity = test_gc_heap_capacity();
 
     gc_scope_token scope = gc_scope_begin();
 
     // Allocate three memory blocks.
     int *ptr1, *ptr2, *ptr3;
-    gc_local_var(&ptr1);
-    gc_local_var(&ptr2);
-    gc_local_var(&ptr3);
+    gc_scope_add_root(&ptr1);
+    gc_scope_add_root(&ptr2);
+    gc_scope_add_root(&ptr3);
 
     assert(ptr1 == NULL);
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
 
-    gc_ptr_copy(&ptr1, gc_malloc(sizeof(int)));
-    gc_ptr_copy(&ptr2, gc_malloc(sizeof(int)));
-    gc_ptr_copy(&ptr3, gc_malloc(sizeof(int)));
+    gc_pointer_assign(&ptr1, gc_malloc(sizeof(int)));
+    gc_pointer_assign(&ptr2, gc_malloc(sizeof(int)));
+    gc_pointer_assign(&ptr3, gc_malloc(sizeof(int)));
 
     assert(ptr1 != NULL);
     assert(ptr2 != NULL);
@@ -69,8 +69,8 @@ int main(void) {
     assert(*ptr3 == 44);
 
     // Check memory usage.
-    assert(test_gc_free_bytes() == heap_size - 3 * int_block_size);
-    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_free_bytes() == heap_capacity - 3 * int_block_size);
+    assert(test_gc_reclaimed_block_count() == 0);
     assert(test_gc_root_count() == 3);
 
     gc_debug_memory_layout layout;
@@ -82,9 +82,9 @@ int main(void) {
     }
 
     // Clear ptr1, which should trigger reclamation.
-    gc_ptr_copy(&ptr1, NULL);
-    assert(test_gc_reclaimed_blocks() == 1);
-    assert(test_gc_free_bytes() == heap_size - 2 * int_block_size);
+    gc_pointer_assign(&ptr1, NULL);
+    assert(test_gc_reclaimed_block_count() == 1);
+    assert(test_gc_free_bytes() == heap_capacity - 2 * int_block_size);
 
     void *remaining_payloads[] = {ptr2, ptr3};
     layout = test_gc_memory_layout();
@@ -98,28 +98,28 @@ int main(void) {
 
     // Test shared references.
     int *ptr4;
-    gc_local_var(&ptr4);
-    gc_ptr_copy(&ptr4, ptr2); // ptr4 and ptr2 share the same object.
+    gc_scope_add_root(&ptr4);
+    gc_pointer_assign(&ptr4, ptr2); // ptr4 and ptr2 share the same object.
 
     assert(*ptr4 == 43);
     assert(ptr2 == ptr4);
 
     // The reference count should now be two.
     // Releasing one reference must not reclaim the object.
-    gc_ptr_copy(&ptr2, NULL);
-    assert(test_gc_reclaimed_blocks() == 1); // Still one.
+    gc_pointer_assign(&ptr2, NULL);
+    assert(test_gc_reclaimed_block_count() == 1); // Still one.
     assert(*ptr4 == 43);
 
     // Release the final reference; the object should be reclaimed.
-    gc_ptr_copy(&ptr4, NULL);
-    assert(test_gc_reclaimed_blocks() == 2);
+    gc_pointer_assign(&ptr4, NULL);
+    assert(test_gc_reclaimed_block_count() == 2);
 
     // Release the final object.
-    gc_ptr_copy(&ptr3, NULL);
-    assert(test_gc_reclaimed_blocks() == 3);
+    gc_pointer_assign(&ptr3, NULL);
+    assert(test_gc_reclaimed_block_count() == 3);
 
     // All memory should have been reclaimed.
-    assert(test_gc_free_bytes() == heap_size);
+    assert(test_gc_free_bytes() == heap_capacity);
 
     gc_scope_end(scope);
     gc_cleanup();

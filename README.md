@@ -57,8 +57,8 @@ any further runtime operation. Pointer-table creation and destruction are indepe
 lifecycle, but a table must remain alive while a registered object can be visited.
 
 Use explicit root scopes for local pointer storage. A scope is ended in LIFO order, and each root
-slot must remain at the same address until its scope ends. `gc_local_var()` clears the slot when it
-registers it. Use `gc_ptr_copy()` for every managed-pointer assignment, including pointer fields
+slot must remain at the same address until its scope ends. `gc_scope_add_root()` clears the slot when
+it registers it. Use `gc_pointer_assign()` for every managed-pointer assignment, including pointer fields
 described by a registered table; direct assignment bypasses collector bookkeeping. In the copying
 collector, only registered roots and fields are updated when objects move.
 
@@ -70,8 +70,8 @@ int main(void) {
 
     gc_scope_token scope = gc_scope_begin();
     int *value = NULL;
-    gc_local_var((void **)&value);
-    gc_ptr_copy((void **)&value, gc_malloc(sizeof(*value)));
+    gc_scope_add_root((void **)&value);
+    gc_pointer_assign((void **)&value, gc_malloc(sizeof(*value)));
     *value = 42;
 
     gc_collect();
@@ -97,12 +97,16 @@ terminating for unavailable inspection, an inactive runtime, invalid output argu
 allocation failures. Except for the availability query and layout disposal, inspection operations
 require an initialized runtime.
 
+Statistics use explicit units and cumulative event counts. `reclaimed_block_count` reports blocks
+found unreachable and reclaimed since `gc_init()`, while `relocated_block_count` reports blocks
+moved by a copying collection. Nonmoving collectors therefore report zero relocations.
+
 ```c
 #include "gc_debug.h"
 
 gc_debug_stats stats;
 if (gc_debug_get_stats(&stats) == GC_DEBUG_OK) {
-    /* Use stats.heap_capacity, stats.free_bytes, and related counters. */
+    /* Use stats.heap_capacity, stats.free_bytes, and the collector counters. */
 }
 ```
 

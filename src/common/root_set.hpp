@@ -9,72 +9,72 @@
 
 namespace gc_runtime {
 
-struct root_entry {
-    void **pointer;
+struct RootEntry {
+    void **slot;
 };
 
-struct scope_boundary {
+struct ScopeBoundary {
     std::uint64_t token;
     std::size_t start;
 };
 
-class root_set {
+class RootSet {
   public:
-    using scope_token = std::uint64_t;
+    using ScopeToken = std::uint64_t;
 
-    scope_token begin_scope() {
-        const scope_token token = next_token();
+    ScopeToken begin_scope() {
+        const ScopeToken token = next_token();
         scopes_.push_back({token, entries_.size()});
         return token;
     }
 
-    void add(void *pointer_address) {
+    void add(void *root_slot) {
         if (scopes_.empty())
-            gc_runtime::fatal("gc_local_var requires an active GC scope");
+            gc_runtime::fatal("gc_scope_add_root requires an active GC scope");
 
-        auto **pointer = static_cast<void **>(pointer_address);
-        entries_.push_back({pointer});
-        *pointer = nullptr;
+        auto **slot = static_cast<void **>(root_slot);
+        entries_.push_back({slot});
+        *slot = nullptr;
     }
 
     template <typename Visitor> void for_each(Visitor &&visitor) const noexcept {
-        for (const root_entry &entry : entries_)
-            visitor(entry.pointer);
+        for (const RootEntry &entry : entries_)
+            visitor(entry.slot);
     }
 
-    void end_scope(scope_token token) noexcept {
+    void end_scope(ScopeToken token) noexcept {
         const std::size_t start = scope_start(token);
         entries_.resize(start);
         scopes_.pop_back();
     }
 
-    template <typename Releaser> void end_scope(scope_token token, Releaser &&releaser) noexcept {
+    template <typename Releaser> void end_scope(ScopeToken token, Releaser &&releaser) noexcept {
         const std::size_t start = scope_start(token);
         for (std::size_t i = entries_.size(); i > start; --i) {
-            void **pointer = entries_[i - 1].pointer;
-            if (*pointer != nullptr)
-                releaser(*pointer);
+            void **slot = entries_[i - 1].slot;
+            if (*slot != nullptr)
+                releaser(*slot);
         }
         entries_.resize(start);
         scopes_.pop_back();
     }
 
     void clear() noexcept {
-        std::vector<root_entry>().swap(entries_);
-        std::vector<scope_boundary>().swap(scopes_);
+        std::vector<RootEntry>().swap(entries_);
+        std::vector<ScopeBoundary>().swap(scopes_);
     }
 
     std::size_t size() const noexcept { return entries_.size(); }
 
   private:
-    scope_token next_token() noexcept {
+    ScopeToken next_token() noexcept {
         if (next_token_ == 0)
             gc_runtime::fatal("GC scope token exhausted");
 
         return next_token_++;
     }
 
-    std::size_t scope_start(scope_token token) const noexcept {
+    std::size_t scope_start(ScopeToken token) const noexcept {
         if (scopes_.empty())
             gc_runtime::fatal("GC scope token is not active");
         if (scopes_.back().token != token)
@@ -83,9 +83,9 @@ class root_set {
         return scopes_.back().start;
     }
 
-    std::vector<root_entry> entries_;
-    std::vector<scope_boundary> scopes_;
-    scope_token next_token_ = 1;
+    std::vector<RootEntry> entries_;
+    std::vector<ScopeBoundary> scopes_;
+    ScopeToken next_token_ = 1;
 };
 
 } // namespace gc_runtime

@@ -4,12 +4,12 @@
 #include <assert.h>
 #include <stdio.h>
 
-void func(void) {
+void allocate_unrooted_object(void) {
     gc_scope_token scope = gc_scope_begin();
     int *ptr;
-    gc_local_var(&ptr);
+    gc_scope_add_root(&ptr);
 
-    gc_ptr_copy(&ptr, gc_malloc(sizeof(int) * 10));
+    gc_pointer_assign(&ptr, gc_malloc(sizeof(int) * 10));
 
     gc_scope_end(scope);
 }
@@ -18,19 +18,19 @@ int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
-    int prev_free_size = test_gc_free_bytes();
+    int previous_free_bytes = test_gc_free_bytes();
 
-    func();
+    allocate_unrooted_object();
 
     // Trigger garbage collection.
     gc_collect();
 
     // Calculate the leaked size.
-    int curr_free_size = test_gc_free_bytes();
-    int leak_size = prev_free_size - curr_free_size;
+    int current_free_bytes = test_gc_free_bytes();
+    int leaked_bytes = previous_free_bytes - current_free_bytes;
 
     // Assert that no memory was leaked.
-    assert(leak_size == 0);
+    assert(leaked_bytes == 0);
 
     gc_scope_end(scope);
 

@@ -5,10 +5,10 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     int *ptr;
-    gc_local_var(&ptr);
+    gc_scope_add_root(&ptr);
 
     // Allocate memory normally.
-    gc_ptr_copy(&ptr, gc_malloc(sizeof(int) * 10));
+    gc_pointer_assign(&ptr, gc_malloc(sizeof(int) * 10));
 
     // No manual free is needed because the GC handles reclamation.
 

@@ -17,10 +17,10 @@
 
 namespace {
 
-constexpr size_t heap_size = 4 * 1024;
+constexpr size_t heap_capacity = 4 * 1024;
 
-struct meta_data {
-    const gc_ptr_table *ptr_table;
+struct ObjectHeader {
+    const gc_ptr_table *pointer_table;
     size_t ref_count;
     size_t size;
 };
@@ -30,8 +30,8 @@ class RefCountState {
     void init() noexcept {
         allocations_.clear();
         roots_.clear();
-        free_size_ = heap_size;
-        block_collected_ = 0;
+        free_bytes_ = heap_capacity;
+        reclaimed_block_count_ = 0;
         initialized_ = true;
     }
 
@@ -39,21 +39,21 @@ class RefCountState {
         require_initialized();
 
         size_t alloc_size;
-        if (!gc_layout::block_size<meta_data>(size, alloc_size) || alloc_size > heap_size ||
-            alloc_size > free_size_)
+        if (!gc_layout::block_size<ObjectHeader>(size, alloc_size) || alloc_size > heap_capacity ||
+            alloc_size > free_bytes_)
             gc_allocation_failure();
 
-        auto block = gc_runtime::malloc_bytes<meta_data>(alloc_size);
-        block->ptr_table = nullptr;
+        auto block = gc_runtime::malloc_bytes<ObjectHeader>(alloc_size);
+        block->pointer_table = nullptr;
         block->ref_count = 0;
         block->size = alloc_size;
 
         void *payload = gc_layout::payload(block.get());
         std::memset(payload, 0, size);
 
-        meta_data *meta_ptr = block.get();
-        allocations_.emplace(meta_ptr, std::move(block));
-        free_size_ -= alloc_size;
+        ObjectHeader *header = block.get();
+        allocations_.emplace(header, std::move(block));
+        free_bytes_ -= alloc_size;
         return payload;
     }
 
@@ -63,42 +63,42 @@ class RefCountState {
         return roots_.begin_scope();
     }
 
-    void add_root(void *ptr_address) {
+    void add_root(void *root_slot) {
         require_initialized();
 
-        roots_.add(ptr_address);
+        roots_.add(root_slot);
     }
 
-    void register_object(void *ptr, const gc_ptr_table *ptr_map) {
+    void register_object(void *object, const gc_ptr_table *pointer_table) {
         require_initialized();
 
-        meta_data *meta_ptr = get_meta_data(ptr);
-        assert(meta_ptr->ptr_table == nullptr);
+        ObjectHeader *header = get_object_header(object);
+        assert(header->pointer_table == nullptr);
 
         size_t payload_capacity;
-        if (ptr_map == nullptr ||
-            !gc_layout::payload_capacity<meta_data>(meta_ptr->size, payload_capacity) ||
-            !gc_pointer_table::valid_for_payload(*ptr_map, payload_capacity))
+        if (pointer_table == nullptr ||
+            !gc_layout::payload_capacity<ObjectHeader>(header->size, payload_capacity) ||
+            !gc_pointer_table::valid_for_payload(*pointer_table, payload_capacity))
             gc_runtime::invalid_pointer_table();
 
-        meta_ptr->ptr_table = ptr_map;
+        header->pointer_table = pointer_table;
     }
 
-    void copy_pointer(void *dst_address, void *src) noexcept {
+    void assign_pointer(void *destination_slot, void *source) noexcept {
         require_initialized();
 
-        auto **dst = static_cast<void **>(dst_address);
-        void *old = *dst;
-        if (old == src)
+        auto **destination = static_cast<void **>(destination_slot);
+        void *old = *destination;
+        if (old == source)
             return;
 
         // Retain the new object before releasing the old one. The old object
-        // may own src and recursively release it when its count reaches zero.
-        if (src != nullptr)
-            increment_ref_count(src);
+        // may own source and recursively release it when its count reaches zero.
+        if (source != nullptr)
+            increment_ref_count(source);
 
-        // Store before releasing old because dst may be a field inside old.
-        *dst = src;
+        // Store before releasing old because destination may be a field inside old.
+        *destination = source;
         if (old != nullptr)
             decrement_ref_count(old);
     }
@@ -116,16 +116,16 @@ class RefCountState {
     void cleanup() noexcept {
         allocations_.clear();
         roots_.clear();
-        free_size_ = 0;
-        block_collected_ = 0;
+        free_bytes_ = 0;
+        reclaimed_block_count_ = 0;
         initialized_ = false;
     }
 
-    size_t free_size() const noexcept { return free_size_; }
+    size_t free_bytes() const noexcept { return free_bytes_; }
 
-    size_t block_collected() const noexcept { return block_collected_; }
+    size_t reclaimed_block_count() const noexcept { return reclaimed_block_count_; }
 
-    size_t root_size() const noexcept { return roots_.size(); }
+    size_t root_count() const noexcept { return roots_.size(); }
 
     bool initialized() const noexcept { return initialized_; }
 
@@ -133,56 +133,56 @@ class RefCountState {
     gc_debug_memory_layout memory_layout() const {
         require_initialized();
 
-        gc_layout::layout_builder layout;
+        gc_layout::LayoutBuilder layout;
         for (const auto &allocation : allocations_)
             layout.add(allocation.first, allocation.first->size, GC_DEBUG_BLOCK_ALLOCATED);
-        return layout.release();
+        return layout.build();
     }
 #endif
 
   private:
-    static meta_data *get_meta_data(void *ptr) noexcept {
-        return gc_layout::metadata<meta_data>(ptr);
+    static ObjectHeader *get_object_header(void *object) noexcept {
+        return gc_layout::metadata<ObjectHeader>(object);
     }
 
     void require_initialized() const noexcept { gc_runtime::require_initialized(initialized_); }
 
     static void increment_ref_count(void *ptr) noexcept {
         assert(ptr != nullptr);
-        get_meta_data(ptr)->ref_count++;
+        get_object_header(ptr)->ref_count++;
     }
 
     void decrement_ref_count(void *ptr) noexcept {
         assert(ptr != nullptr);
 
-        meta_data *meta_ptr = get_meta_data(ptr);
-        if (meta_ptr->ref_count > 0)
-            meta_ptr->ref_count--;
-        if (meta_ptr->ref_count != 0)
+        ObjectHeader *header = get_object_header(ptr);
+        if (header->ref_count > 0)
+            header->ref_count--;
+        if (header->ref_count != 0)
             return;
 
-        if (meta_ptr->ptr_table != nullptr) {
-            gc_pointer_table::for_each_field(*meta_ptr->ptr_table, ptr,
+        if (header->pointer_table != nullptr) {
+            gc_pointer_table::for_each_field(*header->pointer_table, ptr,
                                              [this](void **child_ptr) noexcept {
                                                  if (*child_ptr != nullptr)
                                                      decrement_ref_count(*child_ptr);
                                              });
         }
 
-        const auto allocation = allocations_.find(meta_ptr);
+        const auto allocation = allocations_.find(header);
         assert(allocation != allocations_.end());
 
-        const size_t released_size = meta_ptr->size;
-        free_size_ += released_size;
-        block_collected_++;
+        const size_t released_size = header->size;
+        free_bytes_ += released_size;
+        reclaimed_block_count_++;
         allocations_.erase(allocation);
     }
 
     bool initialized_ = false;
-    size_t free_size_ = 0;
-    gc_runtime::root_set roots_;
-    std::unordered_map<meta_data *, gc_runtime::malloc_ptr<meta_data>> allocations_;
-    size_t block_collected_ = 0;
+    size_t free_bytes_ = 0;
+    gc_runtime::RootSet roots_;
+    std::unordered_map<ObjectHeader *, gc_runtime::MallocPtr<ObjectHeader>> allocations_;
+    size_t reclaimed_block_count_ = 0;
 };
 
 RefCountState state;
@@ -207,12 +207,12 @@ void gc_scope_end(gc_scope_token token) noexcept try { state.end_scope(token); }
     gc_runtime::handle_current_exception();
 }
 
-void gc_local_var(void *ptr_address) noexcept try { state.add_root(ptr_address); } catch (...) {
+void gc_scope_add_root(void *root_slot) noexcept try { state.add_root(root_slot); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
-void gc_register(void *ptr, const gc_ptr_table *ptr_map) noexcept try {
-    state.register_object(ptr, ptr_map);
+void gc_register_object(void *object, const gc_ptr_table *pointer_table) noexcept try {
+    state.register_object(object, pointer_table);
 } catch (...) {
     gc_runtime::handle_current_exception();
 }
@@ -229,8 +229,8 @@ void gc_cleanup(void) noexcept {
     state.cleanup();
 }
 
-void gc_ptr_copy(void *dst_address, void *src) noexcept {
-    state.copy_pointer(dst_address, src);
+void gc_pointer_assign(void *destination_slot, void *source) noexcept {
+    state.assign_pointer(destination_slot, source);
 }
 
 int gc_debug_is_available(void) noexcept {
@@ -251,11 +251,12 @@ gc_debug_status gc_debug_get_stats(gc_debug_stats *out) noexcept {
         return GC_DEBUG_NOT_INITIALIZED;
 
     try {
-        out->heap_capacity = heap_size;
-        out->free_bytes = state.free_size();
-        out->reclaimed_blocks = state.block_collected();
-        out->metadata_size = gc_layout::header_size<meta_data>;
-        out->root_count = state.root_size();
+        out->heap_capacity = heap_capacity;
+        out->free_bytes = state.free_bytes();
+        out->reclaimed_block_count = state.reclaimed_block_count();
+        out->relocated_block_count = 0;
+        out->metadata_size = gc_layout::header_size<ObjectHeader>;
+        out->root_count = state.root_count();
         return GC_DEBUG_OK;
     } catch (const std::bad_alloc &) {
         *out = {};

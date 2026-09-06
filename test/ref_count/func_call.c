@@ -4,22 +4,22 @@
 #include <assert.h>
 #include <stdio.h>
 
-void foo(void) {
+void allocate_temporary_objects(void) {
     const size_t alloc_size = 100;
     gc_scope_token scope = gc_scope_begin();
 
-    void *ptr, *ptr2, *ptr3;
-    gc_local_var(&ptr);
-    gc_local_var(&ptr2);
-    gc_local_var(&ptr3);
+    void *first_pointer, *second_pointer, *third_pointer;
+    gc_scope_add_root(&first_pointer);
+    gc_scope_add_root(&second_pointer);
+    gc_scope_add_root(&third_pointer);
 
-    assert(ptr == NULL);
-    assert(ptr2 == NULL);
-    assert(ptr3 == NULL);
+    assert(first_pointer == NULL);
+    assert(second_pointer == NULL);
+    assert(third_pointer == NULL);
 
-    gc_ptr_copy(&ptr, gc_malloc(alloc_size));  // block D
-    gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block E
-    gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block F
+    gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block D
+    gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block E
+    gc_pointer_assign(&third_pointer, gc_malloc(alloc_size));  // block F
 
     // Release all local variables before returning from the function.
     gc_scope_end(scope);
@@ -33,47 +33,47 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 100;
-    const size_t heap_size = test_gc_heap_capacity();
+    const size_t heap_capacity = test_gc_heap_capacity();
 
-    void *ptr, *ptr2, *ptr3;
-    gc_local_var(&ptr);
-    gc_local_var(&ptr2);
-    gc_local_var(&ptr3);
+    void *first_pointer, *second_pointer, *third_pointer;
+    gc_scope_add_root(&first_pointer);
+    gc_scope_add_root(&second_pointer);
+    gc_scope_add_root(&third_pointer);
 
-    assert(ptr == NULL);
-    assert(ptr2 == NULL);
-    assert(ptr3 == NULL);
+    assert(first_pointer == NULL);
+    assert(second_pointer == NULL);
+    assert(third_pointer == NULL);
 
-    gc_ptr_copy(&ptr, gc_malloc(alloc_size));  // block A
-    gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
-    gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block C
+    gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block A
+    gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block B
+    gc_pointer_assign(&third_pointer, gc_malloc(alloc_size));  // block C
 
-    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_reclaimed_block_count() == 0);
     assert(test_gc_root_count() == 3);
 
     // The initial reclaimed-block count is zero.
-    size_t initial_blocks = test_gc_reclaimed_blocks();
+    size_t initial_reclaimed_count = test_gc_reclaimed_block_count();
 
-    foo(); // block D, E, F allocated and freed here
+    allocate_temporary_objects(); // block D, E, F allocated and freed here
 
     // Three blocks (D, E, and F) should have been reclaimed.
-    assert(test_gc_reclaimed_blocks() == initial_blocks + 3);
+    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 3);
 
     // Three roots remain because A, B, and C are still referenced.
     assert(test_gc_root_count() == 3);
 
     // Release the local variables in main.
-    gc_ptr_copy(&ptr, NULL);
-    assert(test_gc_reclaimed_blocks() == initial_blocks + 4); // +A
+    gc_pointer_assign(&first_pointer, NULL);
+    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 4); // +A
 
-    gc_ptr_copy(&ptr2, NULL);
-    assert(test_gc_reclaimed_blocks() == initial_blocks + 5); // +B
+    gc_pointer_assign(&second_pointer, NULL);
+    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 5); // +B
 
-    gc_ptr_copy(&ptr3, NULL);
-    assert(test_gc_reclaimed_blocks() == initial_blocks + 6); // +C
+    gc_pointer_assign(&third_pointer, NULL);
+    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 6); // +C
 
-    assert(test_gc_free_bytes() == heap_size); // All memory should be reclaimed.
-    assert(test_gc_root_count() == 3);         // The number of roots is unchanged.
+    assert(test_gc_free_bytes() == heap_capacity); // All memory should be reclaimed.
+    assert(test_gc_root_count() == 3);             // The number of roots is unchanged.
 
     gc_scope_end(scope); // Remove the roots created in main.
     assert(test_gc_root_count() == 0);

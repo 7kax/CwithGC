@@ -10,13 +10,13 @@
 
 namespace gc_layout {
 
-class layout_builder {
+class LayoutBuilder {
   public:
     void add(const void *start, std::size_t size, gc_debug_block_state state) {
         blocks_.push_back({start, size, state});
     }
 
-    gc_debug_memory_layout release() const {
+    gc_debug_memory_layout build() const {
         if (blocks_.empty())
             return {nullptr, 0};
 

@@ -8,14 +8,14 @@
 static void nested_scopes(void) {
     const gc_scope_token outer_scope = gc_scope_begin();
     int *outer_root;
-    gc_local_var(&outer_root);
-    gc_ptr_copy(&outer_root, gc_malloc(sizeof(int)));
+    gc_scope_add_root(&outer_root);
+    gc_pointer_assign(&outer_root, gc_malloc(sizeof(int)));
     *outer_root = 10;
 
     const gc_scope_token inner_scope = gc_scope_begin();
     int *inner_root;
-    gc_local_var(&inner_root);
-    gc_ptr_copy(&inner_root, gc_malloc(sizeof(int)));
+    gc_scope_add_root(&inner_root);
+    gc_pointer_assign(&inner_root, gc_malloc(sizeof(int)));
     *inner_root = 20;
 
     assert(inner_scope != outer_scope);
@@ -35,8 +35,8 @@ static void nested_scopes(void) {
 static void recursive_scopes(size_t remaining, size_t active_scopes) {
     const gc_scope_token scope = gc_scope_begin();
     int *root;
-    gc_local_var(&root);
-    gc_ptr_copy(&root, gc_malloc(sizeof(int)));
+    gc_scope_add_root(&root);
+    gc_pointer_assign(&root, gc_malloc(sizeof(int)));
     *root = (int)remaining;
 
     assert(test_gc_root_count() == active_scopes);

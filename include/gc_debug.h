@@ -45,7 +45,8 @@ typedef struct {
 typedef struct {
     size_t heap_capacity;
     size_t free_bytes;
-    size_t reclaimed_blocks;
+    size_t reclaimed_block_count; /* Blocks found unreachable and reclaimed since gc_init(). */
+    size_t relocated_block_count; /* Blocks relocated since gc_init(). */
     size_t metadata_size;
     size_t root_count;
 } gc_debug_stats;

@@ -13,11 +13,12 @@ static inline gc_debug_stats test_gc_stats(void) {
 }
 
 static inline void test_gc_assert_not_initialized(void) {
-    gc_debug_stats stats = {1, 2, 3, 4, 5};
+    gc_debug_stats stats = {1, 2, 3, 4, 5, 6};
     assert(gc_debug_get_stats(&stats) == GC_DEBUG_NOT_INITIALIZED);
     assert(stats.heap_capacity == 0);
     assert(stats.free_bytes == 0);
-    assert(stats.reclaimed_blocks == 0);
+    assert(stats.reclaimed_block_count == 0);
+    assert(stats.relocated_block_count == 0);
     assert(stats.metadata_size == 0);
     assert(stats.root_count == 0);
 }
@@ -30,8 +31,12 @@ static inline size_t test_gc_free_bytes(void) {
     return test_gc_stats().free_bytes;
 }
 
-static inline size_t test_gc_reclaimed_blocks(void) {
-    return test_gc_stats().reclaimed_blocks;
+static inline size_t test_gc_reclaimed_block_count(void) {
+    return test_gc_stats().reclaimed_block_count;
+}
+
+static inline size_t test_gc_relocated_block_count(void) {
+    return test_gc_stats().relocated_block_count;
 }
 
 static inline size_t test_gc_metadata_size(void) {

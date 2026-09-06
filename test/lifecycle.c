@@ -14,8 +14,8 @@ int main(void) {
 
     gc_scope_token first_scope = gc_scope_begin();
     void *first_root;
-    gc_local_var(&first_root);
-    gc_ptr_copy(&first_root, gc_malloc(32));
+    gc_scope_add_root(&first_root);
+    gc_pointer_assign(&first_root, gc_malloc(32));
     assert(test_gc_free_bytes() < test_gc_heap_capacity());
     assert(test_gc_root_count() == 1);
     gc_scope_end(first_scope);
@@ -24,13 +24,13 @@ int main(void) {
     gc_init();
     assert(test_gc_free_bytes() == test_gc_heap_capacity());
     assert(test_gc_root_count() == 0);
-    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_reclaimed_block_count() == 0);
 
     void *second_root;
     gc_scope_token second_scope = gc_scope_begin();
     assert(second_scope != first_scope);
-    gc_local_var(&second_root);
-    gc_ptr_copy(&second_root, gc_malloc(64));
+    gc_scope_add_root(&second_root);
+    gc_pointer_assign(&second_root, gc_malloc(64));
     assert(test_gc_root_count() == 1);
     gc_scope_end(second_scope);
 

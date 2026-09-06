@@ -16,8 +16,8 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     void *root;
-    gc_local_var(&root);
-    gc_ptr_copy(&root, gc_malloc(test_gc_heap_capacity() - test_gc_metadata_size()));
+    gc_scope_add_root(&root);
+    gc_pointer_assign(&root, gc_malloc(test_gc_heap_capacity() - test_gc_metadata_size()));
     assert(test_gc_free_bytes() == 0);
 
     // Collection cannot reclaim the live full-heap object, so this request
