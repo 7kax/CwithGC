@@ -208,11 +208,29 @@ size_t gc_block_collected(void) GC_NOEXCEPT;
 size_t gc_meta_size(void) GC_NOEXCEPT;
 size_t gc_root_size(void) GC_NOEXCEPT;
 
+/**
+ * @brief One block in a collector-specific memory-layout snapshot.
+ *
+ * start is the beginning of the block, including collector metadata. size is
+ * the full block size, including metadata and alignment padding. is_free is
+ * nonzero only for free blocks reported by collectors that track free blocks.
+ */
 typedef struct {
     void *start;
     size_t size;
     int is_free;
 } mem_block_info;
+
+/**
+ * @brief Return a snapshot of the current managed-memory layout.
+ *
+ * The returned array is terminated by an entry whose start is NULL. Its
+ * ordering is collector-specific and must not be relied upon. The caller must
+ * release it with gc_mem_layout_free(). The reference-counting collector
+ * reports only live, noncontiguous allocations; free capacity is reported by
+ * gc_free_size() rather than as is_free entries. A successful gc_init() and an
+ * active runtime are required.
+ */
 mem_block_info *gc_mem_layout(void) GC_NOEXCEPT;
 
 /**

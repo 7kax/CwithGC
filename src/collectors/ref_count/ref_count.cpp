@@ -4,6 +4,10 @@
 #include "common/runtime.hpp"
 #include "gc.h"
 
+#ifdef GC_DEBUG
+#include "common/memory_layout.hpp"
+#endif
+
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -122,6 +126,17 @@ class RefCountState {
 
     size_t root_size() const noexcept { return roots_.size(); }
 
+#ifdef GC_DEBUG
+    mem_block_info *memory_layout() const {
+        require_initialized();
+
+        gc_layout::layout_builder layout;
+        for (const auto &allocation : allocations_)
+            layout.add(allocation.first, allocation.first->size, false);
+        return layout.release();
+    }
+#endif
+
   private:
     static meta_data *get_meta_data(void *ptr) noexcept {
         return gc_layout::metadata<meta_data>(ptr);
@@ -236,8 +251,8 @@ size_t gc_root_size(void) noexcept {
     return state.root_size();
 }
 
-mem_block_info *gc_mem_layout(void) noexcept {
-    return nullptr;
+mem_block_info *gc_mem_layout(void) noexcept try { return state.memory_layout(); } catch (...) {
+    gc_runtime::handle_current_exception();
 }
 #endif
 

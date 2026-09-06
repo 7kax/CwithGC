@@ -4,6 +4,35 @@
 #include <assert.h>
 #include <stdio.h>
 
+static void assert_live_layout(const mem_block_info *layout, void *const payloads[],
+                               size_t payload_count, size_t block_size) {
+    size_t entry_count = 0;
+    for (const mem_block_info *entry = layout; entry->start != NULL; ++entry) {
+        assert(entry->is_free == 0);
+        assert(entry->size == block_size);
+
+        size_t matching_payloads = 0;
+        for (size_t i = 0; i < payload_count; ++i) {
+            void *block_start = (unsigned char *)payloads[i] - gc_meta_size();
+            if (entry->start == block_start)
+                ++matching_payloads;
+        }
+        assert(matching_payloads == 1);
+        ++entry_count;
+    }
+    assert(entry_count == payload_count);
+
+    for (size_t i = 0; i < payload_count; ++i) {
+        void *block_start = (unsigned char *)payloads[i] - gc_meta_size();
+        size_t matching_entries = 0;
+        for (const mem_block_info *entry = layout; entry->start != NULL; ++entry) {
+            if (entry->start == block_start)
+                ++matching_entries;
+        }
+        assert(matching_entries == 1);
+    }
+}
+
 int main(void) {
     const size_t int_block_size = test_gc_block_size(sizeof(int));
     const size_t heap_size = gc_heap_size();
@@ -41,10 +70,25 @@ int main(void) {
     assert(gc_block_collected() == 0);
     assert(gc_root_size() == 3);
 
+    mem_block_info *layout;
+    {
+        void *live_payloads[] = {ptr1, ptr2, ptr3};
+        layout = gc_mem_layout();
+        assert(layout != NULL);
+        assert_live_layout(layout, live_payloads, 3, int_block_size);
+        gc_mem_layout_free(layout);
+    }
+
     // Clear ptr1, which should trigger reclamation.
     gc_ptr_copy(&ptr1, NULL);
     assert(gc_block_collected() == 1);
     assert(gc_free_size() == heap_size - 2 * int_block_size);
+
+    void *remaining_payloads[] = {ptr2, ptr3};
+    layout = gc_mem_layout();
+    assert(layout != NULL);
+    assert_live_layout(layout, remaining_payloads, 2, int_block_size);
+    gc_mem_layout_free(layout);
 
     // Verify that the remaining values are intact.
     assert(*ptr2 == 43);

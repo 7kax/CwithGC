@@ -56,7 +56,7 @@
 | [x] | P1 | gc.h | Redesign `positions[0]` to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
 | [x] | P1 | all | Avoid integer comparisons and arithmetic on object pointers; use safe byte pointers and bounds checks consistently | Behavior is defined under UBSan, strict compilers, and 32-bit and 64-bit environments |
 | [x] | P1 | debug API | Standardize allocation and deallocation for `gc_mem_layout()` | Callers release layouts through `gc_mem_layout_free()`; ASan reports no allocation/deallocation mismatch |
-| [ ] | P1 | ref_count | Decide whether `gc_mem_layout()` supports the reference-counting implementation instead of exposing an API that always returns `nullptr` | Documentation and implementation agree, and generic debugging code cannot misuse the interface |
+| [x] | P1 | ref_count | Implement `gc_mem_layout()` as a live-allocation snapshot instead of always returning `nullptr` | The API documents noncontiguous allocation and free-capacity semantics; generic debugging code can consume and release the snapshot safely |
 
 ## Testing and Validation
 
