@@ -1,17 +1,7 @@
-set(TEST_NAMES
-    uninit_ptr
-    dangling_ptr
-    double_free
-    use_after_free
-)
+set(TEST_NAMES)
 
 if(GC_ENABLE_INSPECTION)
-    list(APPEND TEST_NAMES
-        mem_leak1
-        mem_leak2
-        mem_leak3
-        alloc_fail
-    )
+    list(APPEND TEST_NAMES alloc_fail)
 endif()
 
 set(GC_ALGORITHMS
@@ -39,7 +29,7 @@ if(GC_ENABLE_INSPECTION)
     gc_apply_build_options(mark_sweep_full_heap_alloc_fail)
     add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
     set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
-        PASS_REGULAR_EXPRESSION "Allocation failed"
+        PASS_REGULAR_EXPRESSION "Allocation failure"
     )
 endif()
 

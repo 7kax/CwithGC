@@ -1,5 +1,5 @@
+#include "../test_debug.h"
 #include "gc.h"
-#include "test_debug.h"
 
 #include <assert.h>
 #include <stddef.h>

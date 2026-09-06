@@ -13,7 +13,7 @@ int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
-    // Local pointer variables that simulate uninitialized state.
+    // Nonzero placeholders model storage before instrumentation registers it.
     int *ptr1 = (int *)(uintptr_t)0xff;
     int *ptr2 = (int *)(uintptr_t)0xff;
     int *ptr3 = (int *)(uintptr_t)0xff;
@@ -25,7 +25,7 @@ int main(void) {
     assert(ptr2 == NULL);
     assert(ptr3 == NULL);
 
-    // Pointer fields in a local structure that simulate uninitialized state.
+    // The same initialization contract applies to pointer slots inside locals.
     struct pointer_pair pair = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
     gc_scope_add_root(&pair.first);
     gc_scope_add_root(&pair.second);

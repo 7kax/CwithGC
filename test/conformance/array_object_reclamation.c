@@ -1,7 +1,8 @@
-#include "../test/test_debug.h"
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
+#include <stddef.h>
 
 struct tree_node {
     int data;
@@ -9,7 +10,7 @@ struct tree_node {
     struct tree_node *right;
 };
 
-gc_ptr_table *pointer_table = NULL;
+gc_ptr_table *tree_pointer_table = NULL;
 gc_ptr_table *array_pointer_table = NULL;
 void create_array_pointer_table(void) {
     const size_t pointer_field_offsets[] = {
@@ -20,18 +21,18 @@ void create_array_pointer_table(void) {
         gc_ptr_table_create(10, sizeof(struct tree_node), 2, pointer_field_offsets);
     assert(array_pointer_table != NULL);
 }
-void create_pointer_table(void) {
+void create_tree_pointer_table(void) {
     const size_t pointer_field_offsets[] = {
         offsetof(struct tree_node, left),
         offsetof(struct tree_node, right),
     };
-    pointer_table = gc_ptr_table_create(1, sizeof(struct tree_node), 2, pointer_field_offsets);
-    assert(pointer_table != NULL);
+    tree_pointer_table = gc_ptr_table_create(1, sizeof(struct tree_node), 2, pointer_field_offsets);
+    assert(tree_pointer_table != NULL);
 }
 
-void allocate_unrooted_tree(void) {
+void allocate_unrooted_tree_array(void) {
     create_array_pointer_table();
-    create_pointer_table();
+    create_tree_pointer_table();
 
     gc_scope_token scope = gc_scope_begin();
     struct tree_node *root;
@@ -45,13 +46,13 @@ void allocate_unrooted_tree(void) {
     for (int i = 0; i < 10; i++) {
         root[i].data = i;
         gc_pointer_assign(&root[i].left, gc_malloc(sizeof(struct tree_node)));
-        // root[i].left points to a structure.
-        gc_register_object(root[i].left, pointer_table);
+        // Each left field points to a separately allocated structure.
+        gc_register_object(root[i].left, tree_pointer_table);
         assert(root[i].left != NULL);
         root[i].left->data = i + 1;
         gc_pointer_assign(&root[i].right, gc_malloc(sizeof(struct tree_node)));
-        // root[i].right points to a structure.
-        gc_register_object(root[i].right, pointer_table);
+        // Each right field points to a separately allocated structure.
+        gc_register_object(root[i].right, tree_pointer_table);
         assert(root[i].right != NULL);
         root[i].right->data = i + 2;
     }
@@ -62,22 +63,22 @@ void allocate_unrooted_tree(void) {
 int main(void) {
     gc_init();
 
-    int previous_free_bytes = test_gc_free_bytes();
+    size_t free_bytes_before = test_gc_free_bytes();
 
-    allocate_unrooted_tree();
+    allocate_unrooted_tree_array();
 
     // Trigger garbage collection.
     gc_collect();
 
-    // Calculate the leaked size.
-    int current_free_bytes = test_gc_free_bytes();
-    int leaked_bytes = previous_free_bytes - current_free_bytes;
+    // Calculate the bytes that remained unreclaimed.
+    size_t free_bytes_after = test_gc_free_bytes();
+    size_t unreclaimed_bytes = free_bytes_before - free_bytes_after;
 
-    // Assert that no memory was leaked.
-    assert(leaked_bytes == 0);
+    // Assert that the unrooted array and child objects were reclaimed.
+    assert(unreclaimed_bytes == 0);
 
     gc_cleanup();
-    gc_ptr_table_destroy(pointer_table);
+    gc_ptr_table_destroy(tree_pointer_table);
     gc_ptr_table_destroy(array_pointer_table);
 
     return 0;
