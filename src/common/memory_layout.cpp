@@ -1,4 +1,3 @@
-#include "gc.h"
 #include "gc_debug.h"
 
 extern "C" void gc_debug_memory_layout_dispose(gc_debug_memory_layout *layout) noexcept {
@@ -9,9 +8,3 @@ extern "C" void gc_debug_memory_layout_dispose(gc_debug_memory_layout *layout) n
     layout->blocks = nullptr;
     layout->block_count = 0;
 }
-
-#ifdef GC_DEBUG
-extern "C" void gc_mem_layout_free(mem_block_info *layout) noexcept {
-    delete[] layout;
-}
-#endif

@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -68,7 +69,7 @@ int main(void) {
     assert(new_node == NULL);
 
     gc_collect();
-    assert(gc_block_collected() == n);
+    assert(test_gc_reclaimed_blocks() == n);
 
     gc_scope_end(scope);
     gc_cleanup();

@@ -5,10 +5,11 @@
 #include <stdio.h>
 
 int main(void) {
-    const size_t int_block_size = test_gc_block_size(sizeof(int));
-    const size_t heap_size = gc_heap_size();
-
     gc_init();
+
+    const size_t int_block_size = test_gc_block_size(sizeof(int));
+    const size_t heap_size = test_gc_heap_capacity();
+
     gc_scope_token scope = gc_scope_begin();
 
     // Allocate 3 blocks of memory
@@ -40,7 +41,7 @@ int main(void) {
 
     // Collect garbage
     gc_collect();
-    assert(gc_block_collected() == 3);
+    assert(test_gc_reclaimed_blocks() == 3);
 
     // Address should be different after garbage collection
     assert(ptr1 != pre_ptr1);
@@ -57,8 +58,8 @@ int main(void) {
 
     // Collect garbage again
     gc_collect();
-    assert(gc_block_collected() == 5); // 3 + 2
-    assert(gc_free_size() == heap_size - 2 * int_block_size);
+    assert(test_gc_reclaimed_blocks() == 5); // 3 + 2
+    assert(test_gc_free_bytes() == heap_size - 2 * int_block_size);
 
     // Check if the values are still intact
     assert(*ptr2 == 43);

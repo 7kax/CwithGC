@@ -1,3 +1,4 @@
+#include "../test/test_debug.h"
 #include "gc.h"
 
 /**
@@ -29,7 +30,7 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     // Read the current free-space size.
-    size_t free_size = gc_free_size();
+    size_t free_size = test_gc_free_bytes();
 
     // Define a pointer for the allocated memory.
     void *ptr;
@@ -43,7 +44,7 @@ int main(void) {
     gc_collect();
 
     // Refresh the free-space size.
-    free_size = gc_free_size();
+    free_size = test_gc_free_bytes();
 
     // Request twice the available space, which should fail and call std::abort.
     ptr = gc_malloc(free_size * 2);

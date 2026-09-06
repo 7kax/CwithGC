@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -24,15 +25,15 @@ static void test_self_assignment(void) {
     *ptr = 42;
 
     int *original = ptr;
-    const size_t free_size = gc_free_size();
-    const size_t collected = gc_block_collected();
+    const size_t free_size = test_gc_free_bytes();
+    const size_t collected = test_gc_reclaimed_blocks();
 
     gc_ptr_copy(&ptr, ptr);
 
     assert(ptr == original);
     assert(*ptr == 42);
-    assert(gc_free_size() == free_size);
-    assert(gc_block_collected() == collected);
+    assert(test_gc_free_bytes() == free_size);
+    assert(test_gc_reclaimed_blocks() == collected);
 
     gc_ptr_copy(&ptr, NULL);
     gc_scope_end(scope);
@@ -49,14 +50,14 @@ static void test_child_promotion(gc_ptr_table *table) {
     gc_ptr_copy(&parent->child, gc_malloc(sizeof(int)));
     *parent->child = 43;
 
-    const size_t collected = gc_block_collected();
+    const size_t collected = test_gc_reclaimed_blocks();
     gc_ptr_copy(&root, parent->child);
 
     assert(*(int *)root == 43);
-    assert(gc_block_collected() == collected + 1);
+    assert(test_gc_reclaimed_blocks() == collected + 1);
 
     gc_ptr_copy(&root, NULL);
-    assert(gc_block_collected() == collected + 2);
+    assert(test_gc_reclaimed_blocks() == collected + 2);
     gc_scope_end(scope);
 }
 
@@ -75,19 +76,19 @@ static void test_field_replacement(gc_ptr_table *table) {
     gc_ptr_copy(&replacement, gc_malloc(sizeof(int)));
     *replacement = 45;
 
-    const size_t collected = gc_block_collected();
+    const size_t collected = test_gc_reclaimed_blocks();
     gc_ptr_copy(&parent->child, replacement);
 
-    assert(gc_block_collected() == collected + 1);
+    assert(test_gc_reclaimed_blocks() == collected + 1);
     assert(parent->child == replacement);
     assert(*parent->child == 45);
 
     gc_ptr_copy(&replacement, NULL);
     assert(*parent->child == 45);
-    assert(gc_block_collected() == collected + 1);
+    assert(test_gc_reclaimed_blocks() == collected + 1);
 
     gc_ptr_copy(&parent, NULL);
-    assert(gc_block_collected() == collected + 3);
+    assert(test_gc_reclaimed_blocks() == collected + 3);
     gc_scope_end(scope);
 }
 
@@ -100,8 +101,8 @@ int main(void) {
     test_child_promotion(table);
     test_field_replacement(table);
 
-    assert(gc_free_size() == gc_heap_size());
-    assert(gc_root_size() == 0);
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    assert(test_gc_root_count() == 0);
 
     gc_cleanup();
     gc_ptr_table_destroy(table);

@@ -1,13 +1,18 @@
 set(TEST_NAMES
     uninit_ptr
-    mem_leak1
-    mem_leak2
-    mem_leak3
-    alloc_fail
     dangling_ptr
     double_free
     use_after_free
 )
+
+if(GC_ENABLE_INSPECTION)
+    list(APPEND TEST_NAMES
+        mem_leak1
+        mem_leak2
+        mem_leak3
+        alloc_fail
+    )
+endif()
 
 set(GC_ALGORITHMS
     mark_sweep
@@ -28,13 +33,15 @@ foreach(TEST_NAME ${TEST_NAMES})
     endif()
 endforeach()
 
-add_executable(mark_sweep_full_heap_alloc_fail full_heap_alloc_fail.c)
-target_link_libraries(mark_sweep_full_heap_alloc_fail PRIVATE gc_mark_sweep)
-gc_apply_build_options(mark_sweep_full_heap_alloc_fail)
-add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
-set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
-    PASS_REGULAR_EXPRESSION "Allocation failed"
-)
+if(GC_ENABLE_INSPECTION)
+    add_executable(mark_sweep_full_heap_alloc_fail full_heap_alloc_fail.c)
+    target_link_libraries(mark_sweep_full_heap_alloc_fail PRIVATE gc_mark_sweep)
+    gc_apply_build_options(mark_sweep_full_heap_alloc_fail)
+    add_test(NAME mark_sweep_full_heap_alloc_fail COMMAND mark_sweep_full_heap_alloc_fail)
+    set_tests_properties(mark_sweep_full_heap_alloc_fail PROPERTIES
+        PASS_REGULAR_EXPRESSION "Allocation failed"
+    )
+endif()
 
 foreach(GC_ALGORITHM ${GC_ALGORITHMS})
     set(EXECUTABLE_NAME ${GC_ALGORITHM}_oversized_alloc)

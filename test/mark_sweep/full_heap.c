@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -11,29 +12,29 @@ int main(void) {
     void *root;
     gc_local_var(&root);
 
-    const size_t payload_size = gc_heap_size() - gc_meta_size();
+    const size_t payload_size = test_gc_heap_capacity() - test_gc_metadata_size();
     gc_ptr_copy(&root, gc_malloc(payload_size));
     memset(root, 0x5a, payload_size);
-    assert(gc_free_size() == 0);
+    assert(test_gc_free_bytes() == 0);
 
     // An empty free-list is valid while the entire heap remains reachable.
     gc_collect();
     assert(root != NULL);
-    assert(gc_free_size() == 0);
-    assert(gc_block_collected() == 0);
+    assert(test_gc_free_bytes() == 0);
+    assert(test_gc_reclaimed_blocks() == 0);
     assert(((unsigned char *)root)[0] == 0x5a);
     assert(((unsigned char *)root)[payload_size - 1] == 0x5a);
 
     // Once the object becomes unreachable, sweep must rebuild the free-list.
     gc_ptr_copy(&root, NULL);
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
-    assert(gc_block_collected() == 1);
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    assert(test_gc_reclaimed_blocks() == 1);
 
     // The rebuilt free-list must support another full-heap allocation.
     gc_ptr_copy(&root, gc_malloc(payload_size));
     assert(root != NULL);
-    assert(gc_free_size() == 0);
+    assert(test_gc_free_bytes() == 0);
 
     gc_scope_end(scope);
     gc_cleanup();

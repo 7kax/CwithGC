@@ -1,7 +1,6 @@
 #ifndef CWITHGC_COMMON_MEMORY_LAYOUT_HPP
 #define CWITHGC_COMMON_MEMORY_LAYOUT_HPP
 
-#include "gc.h"
 #include "gc_debug.h"
 
 #include <algorithm>
@@ -31,24 +30,5 @@ class layout_builder {
 };
 
 } // namespace gc_layout
-
-#ifdef GC_DEBUG
-namespace gc_layout {
-
-inline mem_block_info *release_legacy(gc_debug_memory_layout layout) {
-    std::unique_ptr<gc_debug_memory_block[]> blocks(layout.blocks);
-    auto legacy = std::make_unique<mem_block_info[]>(layout.block_count + 1);
-
-    for (std::size_t i = 0; i < layout.block_count; ++i) {
-        const gc_debug_memory_block &block = blocks[i];
-        legacy[i] = {const_cast<void *>(block.start), block.size,
-                     block.state == GC_DEBUG_BLOCK_FREE ? 1 : 0};
-    }
-    legacy[layout.block_count] = {nullptr, 0, 0};
-    return legacy.release();
-}
-
-} // namespace gc_layout
-#endif
 
 #endif // CWITHGC_COMMON_MEMORY_LAYOUT_HPP

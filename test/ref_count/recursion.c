@@ -51,16 +51,16 @@ int main(void) {
     assert(ptr->g == NULL);
     assert(ptr->h == NULL);
 
-    assert(gc_free_size() == gc_heap_size() - struct_block_size);
-    assert(gc_root_size() == 1);
-    assert(gc_block_collected() == 0);
+    assert(test_gc_free_bytes() == test_gc_heap_capacity() - struct_block_size);
+    assert(test_gc_root_count() == 1);
+    assert(test_gc_reclaimed_blocks() == 0);
 
     // Allocate and initialize nested references.
     gc_ptr_copy(&ptr->b, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->c, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->d, gc_malloc(sizeof(int)));
-    assert(gc_block_collected() == 0);
-    assert(gc_root_size() == 1);
+    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_root_count() == 1);
 
     ptr->a = 666;
     *ptr->b = 42;
@@ -79,14 +79,14 @@ int main(void) {
     gc_ptr_copy(&ptr->d, NULL);
 
     // Reference counting is immediate, so clearing the references should reclaim them.
-    assert(gc_block_collected() == 3); // Three integer objects.
+    assert(test_gc_reclaimed_blocks() == 3); // Three integer objects.
 
     // Clear the root object and reclaim it.
     gc_ptr_copy(&ptr, NULL);
-    assert(gc_block_collected() == 4); // Three integer objects and one structure.
+    assert(test_gc_reclaimed_blocks() == 4); // Three integer objects and one structure.
 
     // All memory should have been reclaimed.
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -60,7 +61,7 @@ int main(void) {
     gc_ptr_copy(&cur, NULL);
     gc_ptr_copy(&new_node, NULL);
 
-    const size_t live_size = gc_heap_size() - gc_free_size();
+    const size_t live_size = test_gc_heap_capacity() - test_gc_free_bytes();
     for (int round = 0; round < 3; round++) {
         struct node *old_nodes[5];
         struct node *node = head;
@@ -72,8 +73,8 @@ int main(void) {
         assert(node == NULL);
 
         gc_collect();
-        assert(gc_block_collected() == (size_t)n * (round + 1));
-        assert(gc_free_size() == gc_heap_size() - live_size);
+        assert(test_gc_reclaimed_blocks() == (size_t)n * (round + 1));
+        assert(test_gc_free_bytes() == test_gc_heap_capacity() - live_size);
 
         node = head;
         for (int i = 0; i < n; i++) {
@@ -91,7 +92,7 @@ int main(void) {
 
     // Every node should now be reclaimed.
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

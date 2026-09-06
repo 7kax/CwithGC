@@ -49,17 +49,17 @@ int main(void) {
     assert(ptr->f == NULL);
     assert(ptr->g == NULL);
     assert(ptr->h == NULL);
-    assert(gc_free_size() == gc_heap_size() - struct_block_size);
-    assert(gc_root_size() == 1);
-    assert(gc_block_collected() == 0);
+    assert(test_gc_free_bytes() == test_gc_heap_capacity() - struct_block_size);
+    assert(test_gc_root_count() == 1);
+    assert(test_gc_reclaimed_blocks() == 0);
 
     struct foo *pre_ptr = ptr;
 
     gc_ptr_copy(&ptr->b, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->c, gc_malloc(sizeof(int)));
     gc_ptr_copy(&ptr->d, gc_malloc(sizeof(int)));
-    assert(gc_block_collected() == 0);
-    assert(gc_root_size() == 1);
+    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_root_count() == 1);
 
     ptr->a = 666;
     *ptr->b = 42;
@@ -68,7 +68,7 @@ int main(void) {
 
     // Trigger garbage collection.
     gc_collect();
-    assert(gc_block_collected() == 4); // One structure and three integers.
+    assert(test_gc_reclaimed_blocks() == 4); // One structure and three integers.
 
     // The address should change.
     assert(ptr != pre_ptr);
@@ -82,7 +82,7 @@ int main(void) {
     // Clear the root object and collect.
     gc_ptr_copy((void **)&ptr, NULL);
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
 

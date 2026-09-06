@@ -4,16 +4,17 @@
 #include <assert.h>
 #include <stdio.h>
 
-static void assert_live_layout(const mem_block_info *layout, void *const payloads[],
+static void assert_live_layout(const gc_debug_memory_layout *layout, void *const payloads[],
                                size_t payload_count, size_t block_size) {
     size_t entry_count = 0;
-    for (const mem_block_info *entry = layout; entry->start != NULL; ++entry) {
-        assert(entry->is_free == 0);
+    for (size_t i = 0; i < layout->block_count; ++i) {
+        const gc_debug_memory_block *entry = &layout->blocks[i];
+        assert(entry->state == GC_DEBUG_BLOCK_ALLOCATED);
         assert(entry->size == block_size);
 
         size_t matching_payloads = 0;
         for (size_t i = 0; i < payload_count; ++i) {
-            void *block_start = (unsigned char *)payloads[i] - gc_meta_size();
+            void *block_start = (unsigned char *)payloads[i] - test_gc_metadata_size();
             if (entry->start == block_start)
                 ++matching_payloads;
         }
@@ -23,9 +24,10 @@ static void assert_live_layout(const mem_block_info *layout, void *const payload
     assert(entry_count == payload_count);
 
     for (size_t i = 0; i < payload_count; ++i) {
-        void *block_start = (unsigned char *)payloads[i] - gc_meta_size();
+        void *block_start = (unsigned char *)payloads[i] - test_gc_metadata_size();
         size_t matching_entries = 0;
-        for (const mem_block_info *entry = layout; entry->start != NULL; ++entry) {
+        for (size_t j = 0; j < layout->block_count; ++j) {
+            const gc_debug_memory_block *entry = &layout->blocks[j];
             if (entry->start == block_start)
                 ++matching_entries;
         }
@@ -34,10 +36,11 @@ static void assert_live_layout(const mem_block_info *layout, void *const payload
 }
 
 int main(void) {
-    const size_t int_block_size = test_gc_block_size(sizeof(int));
-    const size_t heap_size = gc_heap_size();
-
     gc_init();
+
+    const size_t int_block_size = test_gc_block_size(sizeof(int));
+    const size_t heap_size = test_gc_heap_capacity();
+
     gc_scope_token scope = gc_scope_begin();
 
     // Allocate three memory blocks.
@@ -66,29 +69,27 @@ int main(void) {
     assert(*ptr3 == 44);
 
     // Check memory usage.
-    assert(gc_free_size() == heap_size - 3 * int_block_size);
-    assert(gc_block_collected() == 0);
-    assert(gc_root_size() == 3);
+    assert(test_gc_free_bytes() == heap_size - 3 * int_block_size);
+    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_root_count() == 3);
 
-    mem_block_info *layout;
+    gc_debug_memory_layout layout;
     {
         void *live_payloads[] = {ptr1, ptr2, ptr3};
-        layout = gc_mem_layout();
-        assert(layout != NULL);
-        assert_live_layout(layout, live_payloads, 3, int_block_size);
-        gc_mem_layout_free(layout);
+        layout = test_gc_memory_layout();
+        assert_live_layout(&layout, live_payloads, 3, int_block_size);
+        test_gc_dispose_memory_layout(&layout);
     }
 
     // Clear ptr1, which should trigger reclamation.
     gc_ptr_copy(&ptr1, NULL);
-    assert(gc_block_collected() == 1);
-    assert(gc_free_size() == heap_size - 2 * int_block_size);
+    assert(test_gc_reclaimed_blocks() == 1);
+    assert(test_gc_free_bytes() == heap_size - 2 * int_block_size);
 
     void *remaining_payloads[] = {ptr2, ptr3};
-    layout = gc_mem_layout();
-    assert(layout != NULL);
-    assert_live_layout(layout, remaining_payloads, 2, int_block_size);
-    gc_mem_layout_free(layout);
+    layout = test_gc_memory_layout();
+    assert_live_layout(&layout, remaining_payloads, 2, int_block_size);
+    test_gc_dispose_memory_layout(&layout);
 
     // Verify that the remaining values are intact.
     assert(*ptr2 == 43);
@@ -106,19 +107,19 @@ int main(void) {
     // The reference count should now be two.
     // Releasing one reference must not reclaim the object.
     gc_ptr_copy(&ptr2, NULL);
-    assert(gc_block_collected() == 1); // Still one.
+    assert(test_gc_reclaimed_blocks() == 1); // Still one.
     assert(*ptr4 == 43);
 
     // Release the final reference; the object should be reclaimed.
     gc_ptr_copy(&ptr4, NULL);
-    assert(gc_block_collected() == 2);
+    assert(test_gc_reclaimed_blocks() == 2);
 
     // Release the final object.
     gc_ptr_copy(&ptr3, NULL);
-    assert(gc_block_collected() == 3);
+    assert(test_gc_reclaimed_blocks() == 3);
 
     // All memory should have been reclaimed.
-    assert(gc_free_size() == heap_size);
+    assert(test_gc_free_bytes() == heap_size);
 
     gc_scope_end(scope);
     gc_cleanup();

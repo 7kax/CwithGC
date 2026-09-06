@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -55,7 +56,7 @@ int main(void) {
     gc_ptr_copy((void **)&right, NULL);
     gc_ptr_copy((void **)&leaf, NULL);
 
-    const size_t live_size = gc_heap_size() - gc_free_size();
+    const size_t live_size = test_gc_heap_capacity() - test_gc_free_bytes();
     for (size_t round = 0; round < 4; round++) {
         struct node *old_root = root;
         struct node *old_left = root->left;
@@ -64,8 +65,8 @@ int main(void) {
 
         gc_collect();
 
-        assert(gc_block_collected() == 4 * (round + 1));
-        assert(gc_free_size() == gc_heap_size() - live_size);
+        assert(test_gc_reclaimed_blocks() == 4 * (round + 1));
+        assert(test_gc_free_bytes() == test_gc_heap_capacity() - live_size);
         assert(root != old_root);
         assert(root->left != old_left);
         assert(root->right != old_right);
@@ -81,7 +82,7 @@ int main(void) {
 
     gc_ptr_copy((void **)&root, NULL);
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

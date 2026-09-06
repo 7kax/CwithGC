@@ -10,10 +10,6 @@ target_include_directories(gc_common
 )
 gc_apply_build_options(gc_common)
 
-if(GC_ENABLE_DEBUG_API)
-    target_compile_definitions(gc_common PRIVATE GC_DEBUG)
-endif()
-
 function(add_gc_collector TARGET SOURCE)
     add_library(${TARGET} STATIC
         ${SOURCE}
@@ -27,10 +23,9 @@ function(add_gc_collector TARGET SOURCE)
             ${CMAKE_CURRENT_SOURCE_DIR}
     )
     gc_apply_build_options(${TARGET})
-
-    if(GC_ENABLE_DEBUG_API)
-        target_compile_definitions(${TARGET} PUBLIC GC_DEBUG)
-    endif()
+    target_compile_definitions(${TARGET} PRIVATE
+        CWITHGC_INTERNAL_INSPECTION=$<BOOL:${GC_ENABLE_INSPECTION}>
+    )
 endfunction()
 
 add_gc_collector(gc_mark_sweep collectors/mark_sweep/mark_sweep.cpp)

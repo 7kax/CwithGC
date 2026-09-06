@@ -5,7 +5,7 @@
 #include "gc.h"
 #include "gc_debug.h"
 
-#ifdef GC_DEBUG
+#if CWITHGC_INTERNAL_INSPECTION
 #include "common/memory_layout.hpp"
 #endif
 
@@ -187,7 +187,7 @@ class CopyingState {
 
     bool initialized() const noexcept { return initialized_; }
 
-#ifdef GC_DEBUG
+#if CWITHGC_INTERNAL_INSPECTION
     gc_debug_memory_layout memory_layout() const {
         require_initialized();
 
@@ -297,36 +297,8 @@ void gc_allocation_failure(void) noexcept {
     gc_runtime::fatal("Allocation failure");
 }
 
-#ifdef GC_DEBUG
-size_t gc_heap_size(void) noexcept {
-    return heap_size;
-}
-
-size_t gc_free_size(void) noexcept {
-    return state.free_size();
-}
-
-size_t gc_block_collected(void) noexcept {
-    return state.block_collected();
-}
-
-size_t gc_meta_size(void) noexcept {
-    return gc_layout::header_size<meta_data>;
-}
-
-size_t gc_root_size(void) noexcept {
-    return state.root_size();
-}
-
-mem_block_info *gc_mem_layout(void) noexcept try {
-    return gc_layout::release_legacy(state.memory_layout());
-} catch (...) {
-    gc_runtime::handle_current_exception();
-}
-#endif
-
 int gc_debug_is_available(void) noexcept {
-#ifdef GC_DEBUG
+#if CWITHGC_INTERNAL_INSPECTION
     return 1;
 #else
     return 0;
@@ -338,9 +310,7 @@ gc_debug_status gc_debug_get_stats(gc_debug_stats *out) noexcept {
         return GC_DEBUG_INVALID_ARGUMENT;
     *out = {};
 
-#ifndef GC_DEBUG
-    return GC_DEBUG_UNAVAILABLE;
-#else
+#if CWITHGC_INTERNAL_INSPECTION
     if (!state.initialized())
         return GC_DEBUG_NOT_INITIALIZED;
 
@@ -358,6 +328,8 @@ gc_debug_status gc_debug_get_stats(gc_debug_stats *out) noexcept {
         *out = {};
         return GC_DEBUG_INTERNAL_ERROR;
     }
+#else
+    return GC_DEBUG_UNAVAILABLE;
 #endif
 }
 
@@ -366,9 +338,7 @@ gc_debug_status gc_debug_snapshot_memory_layout(gc_debug_memory_layout *out) noe
         return GC_DEBUG_INVALID_ARGUMENT;
     *out = {};
 
-#ifndef GC_DEBUG
-    return GC_DEBUG_UNAVAILABLE;
-#else
+#if CWITHGC_INTERNAL_INSPECTION
     if (!state.initialized())
         return GC_DEBUG_NOT_INITIALIZED;
 
@@ -382,6 +352,8 @@ gc_debug_status gc_debug_snapshot_memory_layout(gc_debug_memory_layout *out) noe
         *out = {};
         return GC_DEBUG_INTERNAL_ERROR;
     }
+#else
+    return GC_DEBUG_UNAVAILABLE;
 #endif
 }
 

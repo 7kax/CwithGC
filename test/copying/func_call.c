@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -44,7 +45,7 @@ int main(void) {
     void *pre_ptr3 = ptr3;
 
     foo(); // block D, E, F allocated here
-    assert(gc_root_size() == 3);
+    assert(test_gc_root_count() == 3);
 
     gc_collect();
 
@@ -53,10 +54,10 @@ int main(void) {
     assert(ptr2 != pre_ptr2);
     assert(ptr3 != pre_ptr3);
 
-    assert(gc_block_collected() == 3); // Only A, B, and C remain.
+    assert(test_gc_reclaimed_blocks() == 3); // Only A, B, and C remain.
 
     gc_scope_end(scope);
-    assert(gc_root_size() == 0);
+    assert(test_gc_root_count() == 0);
 
     gc_cleanup();
 

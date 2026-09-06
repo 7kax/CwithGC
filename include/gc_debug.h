@@ -1,13 +1,13 @@
-#ifndef GC_DEBUG_H
-#define GC_DEBUG_H
+#ifndef CWITHGC_GC_DEBUG_H
+#define CWITHGC_GC_DEBUG_H
 
 #include "gc.h"
 
 #ifdef __cplusplus
 extern "C" {
-#define GC_DEBUG_NOEXCEPT noexcept
+#define CWITHGC_DEBUG_NOEXCEPT noexcept
 #else
-#define GC_DEBUG_NOEXCEPT
+#define CWITHGC_DEBUG_NOEXCEPT
 #endif
 
 typedef enum {
@@ -40,15 +40,15 @@ typedef struct {
     size_t root_count;
 } gc_debug_stats;
 
-int gc_debug_is_available(void) GC_DEBUG_NOEXCEPT;
-gc_debug_status gc_debug_get_stats(gc_debug_stats *out) GC_DEBUG_NOEXCEPT;
-gc_debug_status gc_debug_snapshot_memory_layout(gc_debug_memory_layout *out) GC_DEBUG_NOEXCEPT;
-void gc_debug_memory_layout_dispose(gc_debug_memory_layout *layout) GC_DEBUG_NOEXCEPT;
+int gc_debug_is_available(void) CWITHGC_DEBUG_NOEXCEPT;
+gc_debug_status gc_debug_get_stats(gc_debug_stats *out) CWITHGC_DEBUG_NOEXCEPT;
+gc_debug_status gc_debug_snapshot_memory_layout(gc_debug_memory_layout *out) CWITHGC_DEBUG_NOEXCEPT;
+void gc_debug_memory_layout_dispose(gc_debug_memory_layout *layout) CWITHGC_DEBUG_NOEXCEPT;
 
 #ifdef __cplusplus
 }
 #endif
 
-#undef GC_DEBUG_NOEXCEPT
+#undef CWITHGC_DEBUG_NOEXCEPT
 
-#endif // GC_DEBUG_H
+#endif // CWITHGC_GC_DEBUG_H

@@ -1,4 +1,5 @@
 #include "gc.h"
+#include "test_debug.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -37,14 +38,14 @@ int main(void) {
     }
 
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_ptr_copy(&roots[0], gc_malloc(sizeof(max_align_t)));
     assert((uintptr_t)roots[0] % alignment == 0);
     *(max_align_t *)roots[0] = (max_align_t){0};
     gc_ptr_copy(&roots[0], NULL);
     gc_collect();
-    assert(gc_free_size() == gc_heap_size());
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

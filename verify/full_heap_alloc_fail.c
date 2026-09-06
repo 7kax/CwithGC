@@ -1,3 +1,4 @@
+#include "../test/test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -16,8 +17,8 @@ int main(void) {
 
     void *root;
     gc_local_var(&root);
-    gc_ptr_copy(&root, gc_malloc(gc_heap_size() - gc_meta_size()));
-    assert(gc_free_size() == 0);
+    gc_ptr_copy(&root, gc_malloc(test_gc_heap_capacity() - test_gc_metadata_size()));
+    assert(test_gc_free_bytes() == 0);
 
     // Collection cannot reclaim the live full-heap object, so this request
     // must reach gc_allocation_failure() instead of an internal assertion.

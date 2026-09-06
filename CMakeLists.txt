@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(GC_ENABLE_DEBUG_API "Build the collector inspection API" ON)
+option(GC_ENABLE_INSPECTION "Build the collector inspection API" ON)
 option(GC_ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" OFF)
 option(GC_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -92,10 +92,6 @@ add_subdirectory(src)
 
 include(CTest)
 if(BUILD_TESTING)
-    if(NOT GC_ENABLE_DEBUG_API)
-        message(FATAL_ERROR "BUILD_TESTING requires GC_ENABLE_DEBUG_API")
-    endif()
-
     # Add the test and verification directories.
     add_subdirectory(test)
     add_subdirectory(verify)

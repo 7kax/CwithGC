@@ -1,3 +1,4 @@
+#include "../test/test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -17,7 +18,7 @@ int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
-    int prev_free_size = gc_free_size();
+    int prev_free_size = test_gc_free_bytes();
 
     func();
 
@@ -25,7 +26,7 @@ int main(void) {
     gc_collect();
 
     // Calculate the leaked size.
-    int curr_free_size = gc_free_size();
+    int curr_free_size = test_gc_free_bytes();
     int leak_size = prev_free_size - curr_free_size;
 
     // Assert that no memory was leaked.

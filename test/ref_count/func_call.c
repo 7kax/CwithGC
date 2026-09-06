@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -32,7 +33,7 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     const size_t alloc_size = 100;
-    const size_t heap_size = gc_heap_size();
+    const size_t heap_size = test_gc_heap_capacity();
 
     void *ptr, *ptr2, *ptr3;
     gc_local_var(&ptr);
@@ -47,35 +48,35 @@ int main(void) {
     gc_ptr_copy(&ptr2, gc_malloc(alloc_size)); // block B
     gc_ptr_copy(&ptr3, gc_malloc(alloc_size)); // block C
 
-    assert(gc_block_collected() == 0);
-    assert(gc_root_size() == 3);
+    assert(test_gc_reclaimed_blocks() == 0);
+    assert(test_gc_root_count() == 3);
 
     // The initial reclaimed-block count is zero.
-    size_t initial_blocks = gc_block_collected();
+    size_t initial_blocks = test_gc_reclaimed_blocks();
 
     foo(); // block D, E, F allocated and freed here
 
     // Three blocks (D, E, and F) should have been reclaimed.
-    assert(gc_block_collected() == initial_blocks + 3);
+    assert(test_gc_reclaimed_blocks() == initial_blocks + 3);
 
     // Three roots remain because A, B, and C are still referenced.
-    assert(gc_root_size() == 3);
+    assert(test_gc_root_count() == 3);
 
     // Release the local variables in main.
     gc_ptr_copy(&ptr, NULL);
-    assert(gc_block_collected() == initial_blocks + 4); // +A
+    assert(test_gc_reclaimed_blocks() == initial_blocks + 4); // +A
 
     gc_ptr_copy(&ptr2, NULL);
-    assert(gc_block_collected() == initial_blocks + 5); // +B
+    assert(test_gc_reclaimed_blocks() == initial_blocks + 5); // +B
 
     gc_ptr_copy(&ptr3, NULL);
-    assert(gc_block_collected() == initial_blocks + 6); // +C
+    assert(test_gc_reclaimed_blocks() == initial_blocks + 6); // +C
 
-    assert(gc_free_size() == heap_size); // All memory should be reclaimed.
-    assert(gc_root_size() == 3);         // The number of roots is unchanged.
+    assert(test_gc_free_bytes() == heap_size); // All memory should be reclaimed.
+    assert(test_gc_root_count() == 3);         // The number of roots is unchanged.
 
     gc_scope_end(scope); // Remove the roots created in main.
-    assert(gc_root_size() == 0);
+    assert(test_gc_root_count() == 0);
 
     gc_cleanup();
 

@@ -1,3 +1,4 @@
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
@@ -33,17 +34,17 @@ int main(void) {
     gc_ptr_copy(&first, NULL);
     gc_ptr_copy(&second, NULL);
     gc_scope_end(scope);
-    assert(gc_root_size() == 0);
+    assert(test_gc_root_count() == 0);
 
-    const size_t free_size = gc_free_size();
-    const size_t collected = gc_block_collected();
-    assert(free_size < gc_heap_size());
+    const size_t free_size = test_gc_free_bytes();
+    const size_t collected = test_gc_reclaimed_blocks();
+    assert(free_size < test_gc_heap_capacity());
 
     gc_collect();
 
     // Reference counting does not trace unreachable cycles during collection.
-    assert(gc_free_size() == free_size);
-    assert(gc_block_collected() == collected);
+    assert(test_gc_free_bytes() == free_size);
+    assert(test_gc_reclaimed_blocks() == collected);
 
     gc_cleanup();
     gc_ptr_table_destroy(table);

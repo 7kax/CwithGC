@@ -1,4 +1,5 @@
 #include "gc.h"
+#include "test_debug.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -15,28 +16,27 @@ int main(void) {
     void *first_root;
     gc_local_var(&first_root);
     gc_ptr_copy(&first_root, gc_malloc(32));
-    assert(gc_free_size() < gc_heap_size());
-    assert(gc_root_size() == 1);
+    assert(test_gc_free_bytes() < test_gc_heap_capacity());
+    assert(test_gc_root_count() == 1);
     gc_scope_end(first_scope);
 
     // Reinitialization releases the old heap/allocations and root storage.
     gc_init();
-    assert(gc_free_size() == gc_heap_size());
-    assert(gc_root_size() == 0);
-    assert(gc_block_collected() == 0);
+    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    assert(test_gc_root_count() == 0);
+    assert(test_gc_reclaimed_blocks() == 0);
 
     void *second_root;
     gc_scope_token second_scope = gc_scope_begin();
     assert(second_scope != first_scope);
     gc_local_var(&second_root);
     gc_ptr_copy(&second_root, gc_malloc(64));
-    assert(gc_root_size() == 1);
+    assert(test_gc_root_count() == 1);
     gc_scope_end(second_scope);
 
     // Cleanup also releases objects that are still reachable.
     gc_cleanup();
-    assert(gc_free_size() == 0);
-    assert(gc_root_size() == 0);
+    test_gc_assert_not_initialized();
 
     gc_cleanup();
     gc_init();
