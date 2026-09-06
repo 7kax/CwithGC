@@ -25,10 +25,6 @@ int main(void) {
     assert(gc_root_size() == 0);
     assert(gc_block_collected() == 0);
 
-    // Popping an empty root set is a safe no-op.
-    gc_pop();
-    assert(gc_root_size() == 0);
-
     void *second_root;
     gc_scope_token second_scope = gc_scope_begin();
     assert(second_scope != first_scope);

@@ -108,11 +108,6 @@ class RefCountState {
         roots_.end_scope(token, [this](void *ptr) noexcept { decrement_ref_count(ptr); });
     }
 
-    void pop_roots() noexcept {
-        require_initialized();
-        roots_.pop_scope([this](void *ptr) noexcept { decrement_ref_count(ptr); });
-    }
-
     void cleanup() noexcept {
         allocations_.clear();
         roots_.clear();
@@ -218,10 +213,6 @@ void gc_cleanup(void) noexcept {
 
 void gc_ptr_copy(void *dst_address, void *src) noexcept {
     state.copy_pointer(dst_address, src);
-}
-
-void gc_pop(void) noexcept {
-    state.pop_roots();
 }
 
 #ifdef GC_DEBUG

@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <utility>
 #include <vector>
 
 #include "common/runtime.hpp"
@@ -58,20 +57,6 @@ class root_set {
         }
         entries_.resize(start);
         scopes_.pop_back();
-    }
-
-    void pop_scope() noexcept {
-        if (scopes_.empty())
-            return;
-
-        end_scope(scopes_.back().token);
-    }
-
-    template <typename Releaser> void pop_scope(Releaser &&releaser) noexcept {
-        if (scopes_.empty())
-            return;
-
-        end_scope(scopes_.back().token, std::forward<Releaser>(releaser));
     }
 
     void clear() noexcept {

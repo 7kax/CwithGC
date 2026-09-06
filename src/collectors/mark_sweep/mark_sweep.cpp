@@ -215,11 +215,6 @@ class MarkSweepState {
         roots_.end_scope(token);
     }
 
-    void pop_roots() noexcept {
-        require_initialized();
-        roots_.pop_scope();
-    }
-
     void cleanup() noexcept {
         heap_.reset();
         free_list_.clear();
@@ -377,10 +372,6 @@ void gc_cleanup(void) noexcept {
 
 void gc_ptr_copy(void *dst_address, void *src) noexcept {
     state.copy_pointer(dst_address, src);
-}
-
-void gc_pop(void) noexcept {
-    state.pop_roots();
 }
 
 #ifdef GC_DEBUG

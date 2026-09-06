@@ -41,8 +41,7 @@
 | Status | Priority | Module | TODO | Completion Criteria |
 | --- | --- | --- | --- | --- |
 | [x] | P1 | all | Add initialization-state checks to `gc_init()`, `gc_collect()`, `gc_malloc()`, and `gc_cleanup()`, including repeated initialization | Calls before initialization, repeated initialization, and calls after cleanup all have defined behavior |
-| [x] | P1 | all | Make `gc_pop()` return safely when the root set is empty | The implementation no longer calls `back()` on an empty vector |
-| [x] | P1 | all | Redesign root lifetime management to reduce reliance on `__builtin_frame_address(1)` | Behavior is stable under optimized builds, different compilers, and recursive calls; preferably use an explicit scope/token API |
+| [x] | P1 | all | Use explicit scope tokens for root lifetime management | All roots are attached to explicit nested scopes, and behavior is stable under optimized builds, different compilers, and recursive calls |
 | [x] | P1 | all | Define ownership and call requirements for `gc_local_var()` and `gc_ptr_copy()` | Documentation states which pointers must be registered and which fields must be updated through `gc_ptr_copy()` |
 | [x] | P1 | ref_count | Make `gc_cleanup()` release live objects, or explicitly require callers to release every reference first | LeakSanitizer reports no remaining GC objects; state is consistent after cleanup |
 | [x] | P1 | ref_count | Define or implement collection of reference cycles | Documentation explicitly states that cycles are not collected, or cycle-collector tests and implementation are added |

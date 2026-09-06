@@ -13,7 +13,6 @@ static_assert(noexcept(gc_local_var(nullptr)));
 static_assert(noexcept(gc_register(nullptr, nullptr)));
 static_assert(noexcept(gc_ptr_copy(nullptr, nullptr)));
 static_assert(noexcept(gc_collect()));
-static_assert(noexcept(gc_pop()));
 static_assert(noexcept(gc_cleanup()));
 static_assert(noexcept(gc_allocation_failure()));
 

@@ -125,7 +125,7 @@ void *gc_malloc(size_t size) GC_NOEXCEPT;
  * @brief Add a pointer slot to the active root scope.
  *
  * ptr_address must point to writable, naturally aligned pointer storage whose
- * lifetime extends through gc_scope_end() (or gc_pop()). The slot is set to
+ * lifetime extends through gc_scope_end(). The slot is set to
  * null immediately, so register it before assigning a managed pointer. The
  * runtime updates registered slots when a moving collector relocates objects.
  * An active scope is required. The slot itself does not become a managed
@@ -182,17 +182,6 @@ void gc_ptr_copy(void *dst_address, void *src) GC_NOEXCEPT;
  * objects and reclaims unreachable ones without moving live objects.
  */
 void gc_collect(void) GC_NOEXCEPT;
-
-/**
- * @brief End the innermost active root scope (compatibility API).
- *
- * If a scope is active, this is equivalent to ending the token returned by the
- * most recent gc_scope_begin(). If no scope is active, it is a no-op. The
- * explicit gc_scope_begin()/gc_scope_end() API is preferred because it makes
- * ownership and nesting visible to the caller. Like gc_scope_end(), this
- * function requires an initialized runtime.
- */
-void gc_pop(void) GC_NOEXCEPT;
 
 /**
  * @brief Release the collector runtime and all managed memory.

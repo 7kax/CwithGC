@@ -170,11 +170,6 @@ class CopyingState {
         roots_.end_scope(token);
     }
 
-    void pop_roots() noexcept {
-        require_initialized();
-        roots_.pop_scope();
-    }
-
     void cleanup() noexcept {
         from_space_.clear();
         to_space_.clear();
@@ -289,10 +284,6 @@ void gc_ptr_copy(void *dst_address, void *src) noexcept {
 
 void gc_collect(void) noexcept {
     state.collect();
-}
-
-void gc_pop(void) noexcept {
-    state.pop_roots();
 }
 
 void gc_cleanup(void) noexcept {
