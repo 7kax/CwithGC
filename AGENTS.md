@@ -14,6 +14,13 @@
 - TODO entries must distinguish completed fixes, unresolved issues, and the current validation scope. Include reproduction conditions, affected configurations, or temporary workarounds when needed.
 - TODO updates must not hide unresolved problems or mark tasks complete merely to make a phase appear finished.
 
+## C and C++ Semantic Renaming
+
+- Prefer `clang-rename-18` with the project's `compile_commands.json` for renaming C and C++ identifiers. Use semantic renaming before repository-wide textual replacement whenever the symbol is represented in the compilation database.
+- For broad or public API renames, first inspect the affected locations with `--pl` or export proposed replacements with `--export-fixes`; apply the rename with `-i` only after the resolved symbol and scope are correct.
+- Use textual replacement only for documentation, comments, strings, filenames, CMake identifiers, unsupported constructs, or references that `clang-rename-18` cannot resolve. Inspect every textual replacement for unrelated same-name matches.
+- After a rename, search for stale and new identifiers with `rg`, run `clang-format` on touched source files, and validate all affected build and test configurations. Public API renames also require exported-symbol checks.
+
 ## Multi-Agent Delegation
 
 ### Decisions and Task Boundaries
