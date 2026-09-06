@@ -3,6 +3,7 @@
 #include "common/root_set.hpp"
 #include "common/runtime.hpp"
 #include "gc.h"
+#include "gc_debug.h"
 
 #ifdef GC_DEBUG
 #include "common/memory_layout.hpp"
@@ -126,13 +127,15 @@ class RefCountState {
 
     size_t root_size() const noexcept { return roots_.size(); }
 
+    bool initialized() const noexcept { return initialized_; }
+
 #ifdef GC_DEBUG
-    mem_block_info *memory_layout() const {
+    gc_debug_memory_layout memory_layout() const {
         require_initialized();
 
         gc_layout::layout_builder layout;
         for (const auto &allocation : allocations_)
-            layout.add(allocation.first, allocation.first->size, false);
+            layout.add(allocation.first, allocation.first->size, GC_DEBUG_BLOCK_ALLOCATED);
         return layout.release();
     }
 #endif
@@ -251,9 +254,71 @@ size_t gc_root_size(void) noexcept {
     return state.root_size();
 }
 
-mem_block_info *gc_mem_layout(void) noexcept try { return state.memory_layout(); } catch (...) {
+mem_block_info *gc_mem_layout(void) noexcept try {
+    return gc_layout::release_legacy(state.memory_layout());
+} catch (...) {
     gc_runtime::handle_current_exception();
 }
 #endif
+
+int gc_debug_is_available(void) noexcept {
+#ifdef GC_DEBUG
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+gc_debug_status gc_debug_get_stats(gc_debug_stats *out) noexcept {
+    if (out == nullptr)
+        return GC_DEBUG_INVALID_ARGUMENT;
+    *out = {};
+
+#ifndef GC_DEBUG
+    return GC_DEBUG_UNAVAILABLE;
+#else
+    if (!state.initialized())
+        return GC_DEBUG_NOT_INITIALIZED;
+
+    try {
+        out->heap_capacity = heap_size;
+        out->free_bytes = state.free_size();
+        out->reclaimed_blocks = state.block_collected();
+        out->metadata_size = gc_layout::header_size<meta_data>;
+        out->root_count = state.root_size();
+        return GC_DEBUG_OK;
+    } catch (const std::bad_alloc &) {
+        *out = {};
+        return GC_DEBUG_OUT_OF_MEMORY;
+    } catch (...) {
+        *out = {};
+        return GC_DEBUG_INTERNAL_ERROR;
+    }
+#endif
+}
+
+gc_debug_status gc_debug_snapshot_memory_layout(gc_debug_memory_layout *out) noexcept {
+    if (out == nullptr)
+        return GC_DEBUG_INVALID_ARGUMENT;
+    *out = {};
+
+#ifndef GC_DEBUG
+    return GC_DEBUG_UNAVAILABLE;
+#else
+    if (!state.initialized())
+        return GC_DEBUG_NOT_INITIALIZED;
+
+    try {
+        *out = state.memory_layout();
+        return GC_DEBUG_OK;
+    } catch (const std::bad_alloc &) {
+        *out = {};
+        return GC_DEBUG_OUT_OF_MEMORY;
+    } catch (...) {
+        *out = {};
+        return GC_DEBUG_INTERNAL_ERROR;
+    }
+#endif
+}
 
 } // extern "C"
