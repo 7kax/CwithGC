@@ -8,7 +8,7 @@
 
 ## Architecture Direction: C API with a C++20 Implementation
 
-- Keep `include/gc.h` compatible with C11 and use it as the sole public interface. Keep tests in C to continuously verify the real C ABI.
+- Keep `include/gc.h` as the C11 core interface and `include/gc_debug.h` as the stable optional inspection interface. Keep tests in C to continuously verify the real C ABI.
 - Implement internals under `src/` in C++20, using RAII, standard containers, templates, and type-safe helper abstractions where they improve readability.
 - Do not expose STL types, templates, references, exceptions, or other C++ types through the public ABI. Exceptions must never cross an `extern "C"` boundary.
 
@@ -55,8 +55,8 @@
 | [x] | P1 | gc.h / all | Replace `u_int8_t` and `u_int64_t` with standard types and avoid representing pointer arithmetic directly as integers | Use `uint8_t`, `uintptr_t`, or standard byte-pointer arithmetic |
 | [x] | P1 | gc.h | Redesign `positions[0]` to avoid relying on the nonstandard zero-length array extension in C and C++ | Target C11 and C++20 compilers do not depend on nonstandard extensions |
 | [x] | P1 | all | Avoid integer comparisons and arithmetic on object pointers; use safe byte pointers and bounds checks consistently | Behavior is defined under UBSan, strict compilers, and 32-bit and 64-bit environments |
-| [x] | P1 | debug API | Standardize allocation and deallocation for `gc_mem_layout()` | Callers release layouts through `gc_mem_layout_free()`; ASan reports no allocation/deallocation mismatch |
-| [x] | P1 | ref_count | Implement `gc_mem_layout()` as a live-allocation snapshot instead of always returning `nullptr` | The API documents noncontiguous allocation and free-capacity semantics; generic debugging code can consume and release the snapshot safely |
+| [x] | P1 | debug API | Standardize allocation and deallocation for memory-layout snapshots | Snapshots carry an explicit block count and are cleared by `gc_debug_memory_layout_dispose()`; ASan reports no allocation/deallocation mismatch |
+| [x] | P1 | ref_count | Implement memory inspection as a live-allocation snapshot | The API documents noncontiguous allocation and free-capacity semantics; generic inspection code can consume and release the snapshot safely |
 
 ## Testing and Validation
 
@@ -74,14 +74,15 @@
 | --- | --- | --- | --- | --- |
 | [x] | P2 | CMake | Replace global `include_directories()` with `target_include_directories()` and `target_link_libraries(... PRIVATE ...)` | Target dependency boundaries are explicit and directories do not pollute one another |
 | [x] | P2 | CMake | Add a `BUILD_TESTING` option and keep ordinary unit tests separate from verification cases | Default builds are controllable and library-only builds exclude all test targets |
-| [x] | P2 | gc.h / CMake | Stop defining `GC_DEBUG` unconditionally in the public header | `GC_ENABLE_DEBUG_API` determines whether the debug API is declared and built |
+| [x] | P2 | debug API / CMake | Replace the public `GC_DEBUG` macro contract with a stable optional inspection API | `gc_debug.h` is always usable; `GC_ENABLE_INSPECTION` is private to the library build, and disabled builds return explicit status codes |
 | [x] | P2 | gc.h | Document failure behavior, thread safety, and lifecycle requirements | C compilers can check calls strictly and the API contract is complete |
 | [x] | P2 | all | Enforce the clang-format style and the English-only documentation/comment policy | The `quality-check` target runs formatting and language checks automatically |
 
 ## Current Validation Baseline
 
 - [x] Standard Clang build passes
-- [x] Current CTest result: 88/88 passing
+- [x] Current inspection-enabled CTest result: 94/94 passing
+- [x] Inspection-disabled CTest result: 57/57 passing
 - [x] Full ASan/UBSan test suite passes
 - [x] Repeated-GC nested-object tests pass
 - [ ] Release (`NDEBUG`) tests pass
@@ -89,5 +90,5 @@
 ## Confirmed Issues Discovered During Iteration
 
 - [x] **Root-frame lookup triggers strict warnings**: The explicit scope/token API removes `__builtin_frame_address(1)`, so strict builds no longer need the temporary `-Wno-error=frame-address` workaround.
-- [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 88 tests with ASan, UBSan, and LeakSanitizer after fixing the `gc_mem_layout()` allocation/deallocation contract.
+- [x] **Full sanitizer validation is enabled**: The `sanitizers` preset runs all 94 inspection-enabled tests with ASan, UBSan, and LeakSanitizer.
 - [x] **Post-cleanup pointer invalidation must be documented**: `gc_cleanup()` releases all GC memory, including live objects. Every GC pointer held by a caller becomes invalid afterward; the C API documents this lifecycle boundary.

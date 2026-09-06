@@ -27,8 +27,16 @@ cmake --build --preset sanitizers
 ctest --preset sanitizers
 ```
 
-The debug inspection API is enabled by default because the test suite uses it. Disable it for a
-library-only build:
+Collector inspection is enabled by default. The `no-inspection` preset verifies that the stable
+inspection API remains linkable and reports that the optional implementation is unavailable:
+
+```sh
+cmake --preset no-inspection
+cmake --build --preset no-inspection
+ctest --preset no-inspection
+```
+
+The library-only preset produces a strict Release build without inspection or tests:
 
 ```sh
 cmake --preset library
@@ -37,7 +45,7 @@ cmake --build --preset library
 
 ## C API Contract
 
-The public interface is C11 (`include/gc.h`); the implementation is C++20. One process-global
+The core public interface is C11 (`include/gc.h`); the implementation is C++20. One process-global
 collector instance is provided. The collector is single-threaded and not thread-safe, so callers
 must serialize initialization, allocation, root management, pointer assignment, collection, and
 cleanup.
@@ -76,6 +84,32 @@ int main(void) {
 The C ABI does not expose C++ exceptions. Allocation failures, unexpected internal failures, and
 checked contract violations print a diagnostic and abort. Pointer and storage lifetime requirements
 remain caller obligations.
+
+## Inspection API
+
+Include `gc_debug.h` for optional statistics and memory snapshots. Its declarations and symbols do
+not depend on build-system macros. Call `gc_debug_is_available()` to discover whether the linked
+collector was built with `GC_ENABLE_INSPECTION`; disabled builds return `GC_DEBUG_UNAVAILABLE` from
+inspection operations.
+
+`gc_debug_get_stats()` and `gc_debug_snapshot_memory_layout()` return status codes instead of
+terminating for unavailable inspection, an inactive runtime, invalid output arguments, or snapshot
+allocation failures. Except for the availability query and layout disposal, inspection operations
+require an initialized runtime.
+
+```c
+#include "gc_debug.h"
+
+gc_debug_stats stats;
+if (gc_debug_get_stats(&stats) == GC_DEBUG_OK) {
+    /* Use stats.heap_capacity, stats.free_bytes, and related counters. */
+}
+```
+
+A successful memory snapshot contains an explicit `block_count`; it has no sentinel entry. Release
+it with `gc_debug_memory_layout_dispose()`, which clears the snapshot and accepts null. Physical
+layout semantics depend on the collector: mark-and-sweep and copying report allocated and free
+regions, while reference counting reports only its live, noncontiguous allocations.
 
 ## Formatting
 
