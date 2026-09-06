@@ -43,6 +43,18 @@ cmake --preset library
 cmake --build --preset library
 ```
 
+The suite is organized by behavior rather than by a separate verification tree. Runtime-ABI smoke
+tests use the `abi` label, successful lowered-program behavior uses `conformance`, reachable fatal
+paths use `failure`, and tests that exercise optional collector inspection also use `inspection`.
+For example:
+
+```sh
+ctest --test-dir build/default -L failure
+```
+
+The C sources under `test/` invoke runtime hooks explicitly only to model code that an automatic
+instrumentation pass would emit.
+
 ## Compiler/Instrumentation ABI
 
 The core runtime interface is a low-level C ABI (`include/gc.h`) between compiler-generated code (or

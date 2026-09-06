@@ -1,6 +1,5 @@
 #include "gc.h"
 
-#include <csignal>
 #include <cstddef>
 #include <cstdlib>
 #include <new>
@@ -14,16 +13,9 @@ void operator delete(void *) noexcept {}
 
 void operator delete(void *, std::size_t) noexcept {}
 
-static void handle_abort(int signal_number) {
-    if (signal_number == SIGABRT)
-        std::_Exit(EXIT_SUCCESS);
-}
-
 int main(int argc, char **argv) {
     if (argc != 2)
         return EXIT_FAILURE;
-
-    std::signal(SIGABRT, handle_abort);
 
     if (std::string_view(argv[1]) == "pointer-table") {
         const std::size_t pointer_field_offsets[] = {0};

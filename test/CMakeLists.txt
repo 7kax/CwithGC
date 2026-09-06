@@ -5,12 +5,26 @@ set(GC_ALGORITHMS
     ref_count
 )
 
-function(add_collector_test GC_ALGORITHM TEST_TARGET SOURCE_FILE TEST_LABELS)
+function(add_collector_executable GC_ALGORITHM TEST_TARGET SOURCE_FILE)
     add_executable(${TEST_TARGET} ${SOURCE_FILE})
     target_link_libraries(${TEST_TARGET} PRIVATE gc_${GC_ALGORITHM})
     gc_apply_build_options(${TEST_TARGET})
+endfunction()
+
+function(add_collector_test GC_ALGORITHM TEST_TARGET SOURCE_FILE TEST_LABELS)
+    add_collector_executable(${GC_ALGORITHM} ${TEST_TARGET} ${SOURCE_FILE})
     add_test(NAME ${TEST_TARGET} COMMAND ${TEST_TARGET})
     set_tests_properties(${TEST_TARGET} PROPERTIES LABELS "${TEST_LABELS}")
+endfunction()
+
+function(add_expected_failure_test TEST_NAME TEST_TARGET EXPECTED_STDERR TEST_LABELS)
+    add_test(NAME ${TEST_NAME}
+             COMMAND ${CMAKE_COMMAND}
+                     "-DPROGRAM=$<TARGET_FILE:${TEST_TARGET}>"
+                     "-DEXPECTED_STDERR_REGEX=${EXPECTED_STDERR}"
+                     -P ${PROJECT_SOURCE_DIR}/cmake/expect_failure.cmake
+                     -- ${ARGN})
+    set_tests_properties(${TEST_NAME} PROPERTIES LABELS "${TEST_LABELS}" TIMEOUT 15)
 endfunction()
 
 function(add_collector_matrix_test TEST_NAME SOURCE_FILE TEST_LABELS)
@@ -127,3 +141,29 @@ endif()
 add_collector_matrix_test(root_slot_initialization
                           conformance/root_slot_initialization.c
                           conformance)
+
+# Reachable runtime failures are executed as child processes so CTest can
+# validate both their termination status and diagnostic output.
+foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
+    set(OVERSIZED_TARGET ${GC_ALGORITHM}_oversized_allocation)
+    add_collector_executable(${GC_ALGORITHM} ${OVERSIZED_TARGET}
+                             failure/oversized_allocation.c)
+    add_expected_failure_test(${OVERSIZED_TARGET} ${OVERSIZED_TARGET}
+                              "Allocation failure" failure)
+
+    set(EXCEPTION_TARGET ${GC_ALGORITHM}_cpp_exception_boundary)
+    add_collector_executable(${GC_ALGORITHM} ${EXCEPTION_TARGET}
+                             failure/cpp_exception_boundary.cpp)
+    add_expected_failure_test(${EXCEPTION_TARGET}_root ${EXCEPTION_TARGET}
+                              "Allocation failure" failure root)
+    add_expected_failure_test(${EXCEPTION_TARGET}_pointer_table ${EXCEPTION_TARGET}
+                              "Allocation failure" failure pointer-table)
+endforeach()
+
+if(GC_ENABLE_INSPECTION)
+    set(FULL_HEAP_TARGET mark_sweep_full_heap_failure)
+    add_collector_executable(mark_sweep ${FULL_HEAP_TARGET}
+                             failure/mark_sweep_full_heap.c)
+    add_expected_failure_test(${FULL_HEAP_TARGET} ${FULL_HEAP_TARGET}
+                              "Allocation failure" "failure;inspection")
+endif()

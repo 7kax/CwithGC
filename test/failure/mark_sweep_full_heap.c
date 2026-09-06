@@ -1,17 +1,10 @@
-#include "../test/test_debug.h"
+#include "../test_debug.h"
 #include "gc.h"
 
 #include <assert.h>
-#include <signal.h>
 #include <stdlib.h>
 
-static void handle_abort(int signal_number) {
-    if (signal_number == SIGABRT)
-        _Exit(EXIT_SUCCESS);
-}
-
 int main(void) {
-    signal(SIGABRT, handle_abort);
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -21,7 +14,7 @@ int main(void) {
     assert(test_gc_free_bytes() == 0);
 
     // Collection cannot reclaim the live full-heap object, so this request
-    // must reach gc_allocation_failure() instead of an internal assertion.
+    // must reach the runtime allocation-failure path instead of an assertion.
     (void)gc_malloc(1);
 
     gc_scope_end(scope);

@@ -51,8 +51,6 @@ file(GLOB_RECURSE GC_FORMAT_SOURCES CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/test/*.c"
     "${PROJECT_SOURCE_DIR}/test/*.h"
     "${PROJECT_SOURCE_DIR}/test/*.cpp"
-    "${PROJECT_SOURCE_DIR}/verify/*.c"
-    "${PROJECT_SOURCE_DIR}/verify/*.cpp"
 )
 
 find_program(CLANG_FORMAT_EXECUTABLE NAMES clang-format clang-format-18)
@@ -92,7 +90,6 @@ add_subdirectory(src)
 
 include(CTest)
 if(BUILD_TESTING)
-    # Add the test and verification directories.
+    # Add the unified test suite.
     add_subdirectory(test)
-    add_subdirectory(verify)
 endif()
