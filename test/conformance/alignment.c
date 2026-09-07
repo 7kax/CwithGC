@@ -1,6 +1,7 @@
-#include "../test_debug.h"
+#include "../test_check.h"
 #include "gc.h"
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,14 +38,15 @@ int main(void) {
     }
 
     gc_collect();
-    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_pointer_assign(&roots[0], gc_malloc(sizeof(max_align_t)));
     TEST_CHECK((uintptr_t)roots[0] % alignment == 0);
     *(max_align_t *)roots[0] = (max_align_t){0};
-    gc_pointer_assign(&roots[0], NULL);
+    memset(roots[0], 0x5a, sizeof(max_align_t));
     gc_collect();
-    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
+    for (size_t i = 0; i < sizeof(max_align_t); i++)
+        TEST_CHECK(((unsigned char *)roots[0])[i] == 0x5a);
+    gc_pointer_assign(&roots[0], NULL);
 
     gc_scope_end(scope);
     gc_cleanup();

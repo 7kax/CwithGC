@@ -113,17 +113,22 @@ if(GC_ENABLE_INSPECTION)
     add_collector_test(ref_count ref_count_cycle
                        ${CMAKE_CURRENT_SOURCE_DIR}/ref_count/cycle.c
                        "conformance;inspection")
+endif()
 
-    # Shared allocation-contract tests run against every collector.
-    add_collector_matrix_test(alignment conformance/alignment.c "conformance;inspection")
-    add_collector_matrix_test(lifecycle conformance/lifecycle.c "conformance;inspection")
-    add_collector_matrix_test(scope_lifetime conformance/scope_lifetime.c
-                              "conformance;inspection")
-    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-        foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
-            target_compile_options(${GC_ALGORITHM}_scope_lifetime PRIVATE -O2)
-        endforeach()
-    endif()
+# Shared allocation-contract tests run against every collector without relying
+# on collector statistics or memory-layout snapshots.
+add_collector_matrix_test(alignment conformance/alignment.c conformance)
+add_collector_matrix_test(lifecycle conformance/lifecycle.c conformance)
+add_collector_matrix_test(scope_lifetime conformance/scope_lifetime.c conformance)
+add_collector_matrix_test(registered_graph conformance/registered_graph.c conformance)
+add_collector_matrix_test(reclamation_pressure conformance/reclamation_pressure.c conformance)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
+        target_compile_options(${GC_ALGORITHM}_scope_lifetime PRIVATE -O2)
+    endforeach()
+endif()
+
+if(GC_ENABLE_INSPECTION)
 
     # Reclamation checks use collector statistics from the optional inspection API.
     add_collector_matrix_test(unrooted_scalar_reclamation
