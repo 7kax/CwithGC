@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -18,18 +17,18 @@ static void nested_scopes(void) {
     gc_pointer_assign(&inner_root, gc_malloc(sizeof(int)));
     *inner_root = 20;
 
-    assert(inner_scope != outer_scope);
-    assert(test_gc_root_count() == 2);
+    TEST_CHECK(inner_scope != outer_scope);
+    TEST_CHECK(test_gc_root_count() == 2);
     gc_scope_end(inner_scope);
-    assert(test_gc_root_count() == 1);
+    TEST_CHECK(test_gc_root_count() == 1);
 
     gc_collect();
-    assert(*outer_root == 10);
+    TEST_CHECK(*outer_root == 10);
 
     gc_scope_end(outer_scope);
-    assert(test_gc_root_count() == 0);
+    TEST_CHECK(test_gc_root_count() == 0);
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 }
 
 static void recursive_scopes(size_t remaining, size_t active_scopes) {
@@ -39,15 +38,15 @@ static void recursive_scopes(size_t remaining, size_t active_scopes) {
     gc_pointer_assign(&root, gc_malloc(sizeof(int)));
     *root = (int)remaining;
 
-    assert(test_gc_root_count() == active_scopes);
+    TEST_CHECK(test_gc_root_count() == active_scopes);
     if (remaining != 0)
         recursive_scopes(remaining - 1, active_scopes + 1);
 
-    assert(test_gc_root_count() == active_scopes);
+    TEST_CHECK(test_gc_root_count() == active_scopes);
     gc_collect();
-    assert(*root == (int)remaining);
+    TEST_CHECK(*root == (int)remaining);
     gc_scope_end(scope);
-    assert(test_gc_root_count() == active_scopes - 1);
+    TEST_CHECK(test_gc_root_count() == active_scopes - 1);
 }
 
 int main(void) {
@@ -56,7 +55,7 @@ int main(void) {
     nested_scopes();
     recursive_scopes(7, 1);
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_cleanup();
     puts("GC scope lifetime test passed!");

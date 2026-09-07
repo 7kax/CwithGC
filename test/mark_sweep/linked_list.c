@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,7 +12,7 @@ struct node {
 gc_ptr_table *create_pointer_table(void) {
     const size_t pointer_field_offsets[] = {offsetof(struct node, next)};
     gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, pointer_field_offsets);
-    assert(table != NULL);
+    TEST_CHECK(table != NULL);
     return table;
 }
 
@@ -60,16 +59,16 @@ int main(void) {
     gc_pointer_assign(&new_node, NULL);
 
     for (size_t i = 0; i < n; i++) {
-        assert(head->data == elements[i]);
+        TEST_CHECK(head->data == elements[i]);
         gc_pointer_assign((void **)&head, head->next);
     }
 
-    assert(head == NULL);
-    assert(cur == NULL);
-    assert(new_node == NULL);
+    TEST_CHECK(head == NULL);
+    TEST_CHECK(cur == NULL);
+    TEST_CHECK(new_node == NULL);
 
     gc_collect();
-    assert(test_gc_reclaimed_block_count() == n);
+    TEST_CHECK(test_gc_reclaimed_block_count() == n);
 
     gc_scope_end(scope);
     gc_cleanup();

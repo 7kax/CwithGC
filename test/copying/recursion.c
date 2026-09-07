@@ -1,7 +1,6 @@
 #include "../test_layout.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -27,7 +26,7 @@ gc_ptr_table *create_pointer_table(void) {
     };
     gc_ptr_table *table =
         gc_ptr_table_create(1, sizeof(struct pointer_object), 7, pointer_field_offsets);
-    assert(table != NULL);
+    TEST_CHECK(table != NULL);
     return table;
 }
 
@@ -43,25 +42,25 @@ int main(void) {
     gc_scope_add_root(&ptr);
     gc_pointer_assign(&ptr, gc_malloc(sizeof(struct pointer_object)));
     gc_register_object(ptr, pointer_table);
-    assert(ptr->a == 0); // The entire structure is zero-initialized.
-    assert(ptr->b == NULL);
-    assert(ptr->c == NULL);
-    assert(ptr->d == NULL);
-    assert(ptr->e == NULL);
-    assert(ptr->f == NULL);
-    assert(ptr->g == NULL);
-    assert(ptr->h == NULL);
-    assert(test_gc_free_bytes() == test_gc_heap_capacity() - struct_block_size);
-    assert(test_gc_root_count() == 1);
-    assert(test_gc_relocated_block_count() == 0);
+    TEST_CHECK(ptr->a == 0); // The entire structure is zero-initialized.
+    TEST_CHECK(ptr->b == NULL);
+    TEST_CHECK(ptr->c == NULL);
+    TEST_CHECK(ptr->d == NULL);
+    TEST_CHECK(ptr->e == NULL);
+    TEST_CHECK(ptr->f == NULL);
+    TEST_CHECK(ptr->g == NULL);
+    TEST_CHECK(ptr->h == NULL);
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity() - struct_block_size);
+    TEST_CHECK(test_gc_root_count() == 1);
+    TEST_CHECK(test_gc_relocated_block_count() == 0);
 
     struct pointer_object *pre_ptr = ptr;
 
     gc_pointer_assign(&ptr->b, gc_malloc(sizeof(int)));
     gc_pointer_assign(&ptr->c, gc_malloc(sizeof(int)));
     gc_pointer_assign(&ptr->d, gc_malloc(sizeof(int)));
-    assert(test_gc_relocated_block_count() == 0);
-    assert(test_gc_root_count() == 1);
+    TEST_CHECK(test_gc_relocated_block_count() == 0);
+    TEST_CHECK(test_gc_root_count() == 1);
 
     ptr->a = 666;
     *ptr->b = 42;
@@ -70,21 +69,21 @@ int main(void) {
 
     // Trigger garbage collection.
     gc_collect();
-    assert(test_gc_relocated_block_count() == 4); // One structure and three integers.
+    TEST_CHECK(test_gc_relocated_block_count() == 4); // One structure and three integers.
 
     // The address should change.
-    assert(ptr != pre_ptr);
+    TEST_CHECK(ptr != pre_ptr);
 
     // The values should remain unchanged.
-    assert(ptr->a == 666);
-    assert(*ptr->b == 42);
-    assert(*ptr->c == 43);
-    assert(*ptr->d == 44);
+    TEST_CHECK(ptr->a == 666);
+    TEST_CHECK(*ptr->b == 42);
+    TEST_CHECK(*ptr->c == 43);
+    TEST_CHECK(*ptr->d == 44);
 
     // Clear the root object and collect.
     gc_pointer_assign((void **)&ptr, NULL);
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
 

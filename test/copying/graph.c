@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -17,7 +16,7 @@ static gc_ptr_table *create_pointer_table(void) {
         offsetof(struct node, right),
     };
     gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 2, pointer_field_offsets);
-    assert(table != NULL);
+    TEST_CHECK(table != NULL);
     return table;
 }
 
@@ -65,24 +64,24 @@ int main(void) {
 
         gc_collect();
 
-        assert(test_gc_relocated_block_count() == 4 * (round + 1));
-        assert(test_gc_free_bytes() == test_gc_heap_capacity() - live_size);
-        assert(root != old_root);
-        assert(root->left != old_left);
-        assert(root->right != old_right);
-        assert(root->left->left != old_leaf);
+        TEST_CHECK(test_gc_relocated_block_count() == 4 * (round + 1));
+        TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity() - live_size);
+        TEST_CHECK(root != old_root);
+        TEST_CHECK(root->left != old_left);
+        TEST_CHECK(root->right != old_right);
+        TEST_CHECK(root->left->left != old_leaf);
 
-        assert(root->value == 1);
-        assert(root->left->value == 2);
-        assert(root->right->value == 3);
-        assert(root->left->left->value == 4);
-        assert(root->left->left == root->right->right);
-        assert(root->left->left->left == root);
+        TEST_CHECK(root->value == 1);
+        TEST_CHECK(root->left->value == 2);
+        TEST_CHECK(root->right->value == 3);
+        TEST_CHECK(root->left->left->value == 4);
+        TEST_CHECK(root->left->left == root->right->right);
+        TEST_CHECK(root->left->left->left == root);
     }
 
     gc_pointer_assign((void **)&root, NULL);
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

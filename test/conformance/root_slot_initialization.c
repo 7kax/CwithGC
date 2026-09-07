@@ -1,6 +1,6 @@
+#include "../test_check.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -21,17 +21,17 @@ int main(void) {
     gc_scope_add_root(&ptr2);
     gc_scope_add_root(&ptr3);
 
-    assert(ptr1 == NULL);
-    assert(ptr2 == NULL);
-    assert(ptr3 == NULL);
+    TEST_CHECK(ptr1 == NULL);
+    TEST_CHECK(ptr2 == NULL);
+    TEST_CHECK(ptr3 == NULL);
 
     // The same initialization contract applies to pointer slots inside locals.
     struct pointer_pair pair = {(int *)(uintptr_t)0xff, (int *)(uintptr_t)0xff};
     gc_scope_add_root(&pair.first);
     gc_scope_add_root(&pair.second);
 
-    assert(pair.first == NULL);
-    assert(pair.second == NULL);
+    TEST_CHECK(pair.first == NULL);
+    TEST_CHECK(pair.second == NULL);
 
     gc_scope_end(scope);
 

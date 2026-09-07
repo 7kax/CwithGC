@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -12,7 +11,7 @@ struct node {
 int main(void) {
     const size_t pointer_field_offsets[] = {offsetof(struct node, next)};
     gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, pointer_field_offsets);
-    assert(table != NULL);
+    TEST_CHECK(table != NULL);
 
     gc_init();
     gc_scope_token scope = gc_scope_begin();
@@ -34,17 +33,17 @@ int main(void) {
     gc_pointer_assign(&first, NULL);
     gc_pointer_assign(&second, NULL);
     gc_scope_end(scope);
-    assert(test_gc_root_count() == 0);
+    TEST_CHECK(test_gc_root_count() == 0);
 
     const size_t free_bytes = test_gc_free_bytes();
     const size_t reclaimed_count = test_gc_reclaimed_block_count();
-    assert(free_bytes < test_gc_heap_capacity());
+    TEST_CHECK(free_bytes < test_gc_heap_capacity());
 
     gc_collect();
 
     // Reference counting does not trace unreachable cycles during collection.
-    assert(test_gc_free_bytes() == free_bytes);
-    assert(test_gc_reclaimed_block_count() == reclaimed_count);
+    TEST_CHECK(test_gc_free_bytes() == free_bytes);
+    TEST_CHECK(test_gc_reclaimed_block_count() == reclaimed_count);
 
     gc_cleanup();
     gc_ptr_table_destroy(table);

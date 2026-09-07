@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdio.h>
 
 void allocate_temporary_objects(void) {
@@ -13,9 +12,9 @@ void allocate_temporary_objects(void) {
     gc_scope_add_root(&second_pointer);
     gc_scope_add_root(&third_pointer);
 
-    assert(first_pointer == NULL);
-    assert(second_pointer == NULL);
-    assert(third_pointer == NULL);
+    TEST_CHECK(first_pointer == NULL);
+    TEST_CHECK(second_pointer == NULL);
+    TEST_CHECK(third_pointer == NULL);
 
     gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block D
     gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block E
@@ -40,16 +39,16 @@ int main(void) {
     gc_scope_add_root(&second_pointer);
     gc_scope_add_root(&third_pointer);
 
-    assert(first_pointer == NULL);
-    assert(second_pointer == NULL);
-    assert(third_pointer == NULL);
+    TEST_CHECK(first_pointer == NULL);
+    TEST_CHECK(second_pointer == NULL);
+    TEST_CHECK(third_pointer == NULL);
 
     gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block A
     gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block B
     gc_pointer_assign(&third_pointer, gc_malloc(alloc_size));  // block C
 
-    assert(test_gc_reclaimed_block_count() == 0);
-    assert(test_gc_root_count() == 3);
+    TEST_CHECK(test_gc_reclaimed_block_count() == 0);
+    TEST_CHECK(test_gc_root_count() == 3);
 
     // The initial reclaimed-block count is zero.
     size_t initial_reclaimed_count = test_gc_reclaimed_block_count();
@@ -57,26 +56,26 @@ int main(void) {
     allocate_temporary_objects(); // block D, E, F allocated and freed here
 
     // Three blocks (D, E, and F) should have been reclaimed.
-    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 3);
+    TEST_CHECK(test_gc_reclaimed_block_count() == initial_reclaimed_count + 3);
 
     // Three roots remain because A, B, and C are still referenced.
-    assert(test_gc_root_count() == 3);
+    TEST_CHECK(test_gc_root_count() == 3);
 
     // Release the local variables in main.
     gc_pointer_assign(&first_pointer, NULL);
-    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 4); // +A
+    TEST_CHECK(test_gc_reclaimed_block_count() == initial_reclaimed_count + 4); // +A
 
     gc_pointer_assign(&second_pointer, NULL);
-    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 5); // +B
+    TEST_CHECK(test_gc_reclaimed_block_count() == initial_reclaimed_count + 5); // +B
 
     gc_pointer_assign(&third_pointer, NULL);
-    assert(test_gc_reclaimed_block_count() == initial_reclaimed_count + 6); // +C
+    TEST_CHECK(test_gc_reclaimed_block_count() == initial_reclaimed_count + 6); // +C
 
-    assert(test_gc_free_bytes() == heap_capacity); // All memory should be reclaimed.
-    assert(test_gc_root_count() == 3);             // The number of roots is unchanged.
+    TEST_CHECK(test_gc_free_bytes() == heap_capacity); // All memory should be reclaimed.
+    TEST_CHECK(test_gc_root_count() == 3);             // The number of roots is unchanged.
 
     gc_scope_end(scope); // Remove the roots created in main.
-    assert(test_gc_root_count() == 0);
+    TEST_CHECK(test_gc_root_count() == 0);
 
     gc_cleanup();
 

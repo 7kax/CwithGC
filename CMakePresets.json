@@ -26,6 +26,18 @@
       }
     },
     {
+      "name": "release-tests",
+      "displayName": "Strict Release test build",
+      "inherits": "strict",
+      "binaryDir": "${sourceDir}/build/release-tests",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "GC_ENABLE_INSPECTION": "ON",
+        "GC_ENABLE_SANITIZERS": "OFF"
+      }
+    },
+    {
       "name": "sanitizers",
       "displayName": "ASan and UBSan build",
       "inherits": "strict",
@@ -67,6 +79,10 @@
       "configurePreset": "strict"
     },
     {
+      "name": "release-tests",
+      "configurePreset": "release-tests"
+    },
+    {
       "name": "sanitizers",
       "configurePreset": "sanitizers"
     },
@@ -90,6 +106,13 @@
     {
       "name": "strict",
       "configurePreset": "strict",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release-tests",
+      "configurePreset": "release-tests",
       "output": {
         "outputOnFailure": true
       }

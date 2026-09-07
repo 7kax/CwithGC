@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -31,7 +30,7 @@ int main(void) {
     size_t unreclaimed_bytes = free_bytes_before - free_bytes_after;
 
     // Assert that the unrooted allocation was reclaimed.
-    assert(unreclaimed_bytes == 0);
+    TEST_CHECK(unreclaimed_bytes == 0);
 
     gc_scope_end(scope);
 

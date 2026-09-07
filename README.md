@@ -17,14 +17,26 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-Use the `strict` preset to treat compiler warnings as errors. The `sanitizers` preset additionally
-enables AddressSanitizer and UndefinedBehaviorSanitizer:
+Use the `strict` preset to treat compiler warnings as errors:
 
 ```sh
 cmake --preset strict
 cmake --build --preset strict
 ctest --preset strict
+```
 
+The `release-tests` preset runs the complete test suite as a strict Release build, keeping test
+checks active even when the compiler defines `NDEBUG`:
+
+```sh
+cmake --preset release-tests
+cmake --build --preset release-tests
+ctest --preset release-tests
+```
+
+The `sanitizers` preset additionally enables AddressSanitizer and UndefinedBehaviorSanitizer:
+
+```sh
 cmake --preset sanitizers
 cmake --build --preset sanitizers
 ctest --preset sanitizers

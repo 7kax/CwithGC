@@ -1,7 +1,6 @@
 #include "../test_debug.h"
 #include "gc.h"
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,7 +17,7 @@ int main(void) {
     for (size_t i = 0; i < count; i++) {
         gc_scope_add_root(&roots[i]);
         gc_pointer_assign(&roots[i], gc_malloc(sizes[i]));
-        assert((uintptr_t)roots[i] % alignment == 0);
+        TEST_CHECK((uintptr_t)roots[i] % alignment == 0);
 
         if (sizes[i] == sizeof(max_align_t))
             *(max_align_t *)roots[i] = (max_align_t){0};
@@ -28,9 +27,9 @@ int main(void) {
     gc_collect();
 
     for (size_t i = 0; i < count; i++) {
-        assert((uintptr_t)roots[i] % alignment == 0);
+        TEST_CHECK((uintptr_t)roots[i] % alignment == 0);
         for (size_t j = 0; j < sizes[i]; j++)
-            assert(((unsigned char *)roots[i])[j] == (unsigned char)(i + 1));
+            TEST_CHECK(((unsigned char *)roots[i])[j] == (unsigned char)(i + 1));
 
         if (sizes[i] == sizeof(max_align_t))
             *(max_align_t *)roots[i] = (max_align_t){0};
@@ -38,14 +37,14 @@ int main(void) {
     }
 
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_pointer_assign(&roots[0], gc_malloc(sizeof(max_align_t)));
-    assert((uintptr_t)roots[0] % alignment == 0);
+    TEST_CHECK((uintptr_t)roots[0] % alignment == 0);
     *(max_align_t *)roots[0] = (max_align_t){0};
     gc_pointer_assign(&roots[0], NULL);
     gc_collect();
-    assert(test_gc_free_bytes() == test_gc_heap_capacity());
+    TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 
     gc_scope_end(scope);
     gc_cleanup();

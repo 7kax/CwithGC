@@ -23,6 +23,7 @@ jobs:
       matrix:
         preset:
           - strict
+          - release-tests
           - sanitizers
           - no-inspection
     env:
