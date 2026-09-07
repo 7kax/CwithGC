@@ -6,13 +6,13 @@
 - Preserve identifiers, API names, command lines, and quoted diagnostics exactly when translating or updating documentation.
 - User-facing conversation may follow the user's language; the English-only rule applies to repository content.
 
-## TODO Synchronization
+## Work Tracking and Architecture Documentation
 
-- Issues discovered during iteration and confirmed by code inspection or testing must be recorded promptly in the root `TODO.md`.
-- Prefer updating an existing matching entry. If none exists, add the issue under the appropriate module and priority. Record validation limitations, toolchain warnings, and API contract gaps instead of leaving them only in handoff notes.
-- Mark an item `[x]` only when its completion criteria have been met and verified. Items that remain unfixed, are only partially verified, or depend on follow-up work must stay `[ ]`.
-- TODO entries must distinguish completed fixes, unresolved issues, and the current validation scope. Include reproduction conditions, affected configurations, or temporary workarounds when needed.
-- TODO updates must not hide unresolved problems or mark tasks complete merely to make a phase appear finished.
+- The root `TODO.md` is exclusively for unfinished, actionable work. Do not store architecture rationale, stable design decisions, completed-item history, or passing validation baselines there.
+- Every TODO entry must remain unchecked and include a concrete completion criterion. Remove an entry after the work is implemented, verified, and committed; use Git history rather than a checked item to record completion.
+- Issues discovered during iteration and confirmed by code inspection or testing must be recorded promptly. Prefer enriching an existing matching task instead of creating a duplicate, and include reproduction conditions or affected configurations when they materially guide the fix.
+- Stable architecture decisions, compiler/runtime responsibilities, managed-pointer constraints, and C feature-support policy belong in `docs/architecture.md`. Update that document when implementation work changes a design boundary or establishes a new architectural constraint.
+- When one change affects both pending work and established design, update `TODO.md` and `docs/architecture.md` separately so the task and rationale remain independently readable.
 
 ## C and C++ Semantic Renaming
 

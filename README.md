@@ -3,6 +3,9 @@
 CwithGC is a small garbage-collection runtime. Its C11 compiler/instrumentation ABI is implemented
 in C++20 with reference-counting, copying, and mark-and-sweep collectors.
 
+See [the architecture document](docs/architecture.md) for the managed-pointer model, compiler
+responsibilities, and the distinction between planned and fundamentally unsupported C features.
+
 ## Build and Test
 
 Building the project requires CMake 3.20 or newer and Ninja. The checked-in CMake presets provide

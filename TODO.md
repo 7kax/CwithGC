@@ -1,38 +1,22 @@
 # TODO
 
+This file contains unfinished, actionable work only. Architectural decisions and C feature-support
+policy are documented in `docs/architecture.md`.
+
 ## Priority Definitions
 
 - **P0**: Undefined behavior, data corruption, or errors in core GC logic
-- **P1**: API safety, portability, or resource-management issues
-- **P2**: Testing, build, and maintainability improvements
+- **P1**: Work required for a reliable compiler/runtime pipeline, ABI safety, or portability
+- **P2**: Testing depth, optional feature support, build improvements, or maintainability
 
-## Architecture Direction: Compiler/Instrumentation C ABI with a C++20 Implementation
+## Roadmap
 
-- Keep `include/gc.h` as the C11 ABI boundary consumed by compiler-generated or compiler-inserted instrumentation, not as a manually called application API. Keep `include/gc_debug.h` as the stable optional inspection interface, and keep C/C++ runtime-ABI smoke tests to verify the real boundary.
-- Implement internals under `src/` in C++20, using RAII, standard containers, templates, and type-safe helper abstractions where they improve readability.
-- Do not expose STL types, templates, references, exceptions, or other C++ types through the public ABI. Exceptions must never cross an `extern "C"` boundary.
-
-## Future Work
-
-- [ ] **P2 | compiler/instrumentation**: Add an in-repo automatic instrumentation pass that lowers program startup and teardown, managed allocations, pointer assignments, object-layout registration, and local-root scopes to the `gc.h` runtime ABI. A checked-in tool should transform a supported input program and produce generated code that exercises the runtime ABI without hand-written GC calls.
-
-## Testing and Validation
-
-| Status | Priority | Module | TODO | Completion Criteria |
-| --- | --- | --- | --- | --- |
-| [x] | P1 | tests | Add regression tests for nested objects, cycles, repeated collections, full-heap allocation, and self-assignment | Every fixed core bug has a minimal reproducing test |
-| [x] | P1 | tests | Add ASan, UBSan, and LeakSanitizer build/test configurations | CI or a local command can run sanitizer tests in one step |
-| [x] | P2 | tests | Replace the ambiguous verification tree with ABI, conformance, failure, and inspection test labels | Tests model compiler-generated calls; impossible malformed-instrumentation scenarios are removed; reachable failures validate both termination and diagnostics |
-| [ ] | P2 | tests | Avoid relying only on `assert` so Release builds still check results | Tests fail correctly when `NDEBUG` is defined |
-| [x] | P2 | tests | Free dynamically allocated pointer tables in tests or replace them with static constant tables | LeakSanitizer reports no leaks from test helper memory |
-
-## Current Validation Baseline
-
-- [x] Standard Clang build passes
-- [x] Current inspection-enabled CTest result: 58/58 passing
-- [x] Inspection-disabled CTest result: 24/24 passing
-- [x] Full ASan/UBSan test suite passes
-- [x] Repeated-GC nested-object tests pass
-- [ ] Release (`NDEBUG`) tests pass
-
-## Confirmed Issues Discovered During Iteration
+| Status | Phase | Priority | Module | Work | Completion Criteria |
+| --- | --- | --- | --- | --- | --- |
+| [ ] | 1 | P1 | tests / CI | Replace assertion-only test checks and add a Release test preset | Checks still execute with `NDEBUG`; the current unused-parameter failure in `test/debug_api_smoke.c` is eliminated; the complete strict Release suite passes in CI |
+| [ ] | 1 | P1 | tests | Run behavioral conformance tests with inspection disabled | Allocation, reachability, object-data, and collection behavior run for every collector without debug statistics or layout snapshots; no-inspection coverage expands beyond the current three `conformance` cases |
+| [ ] | 2 | P1 | compiler / ABI | Specify the supported C subset and freeze the v1 lowering contract | Documentation defines allocation typing, safe points, root lifetimes, object-layout generation, control-flow cleanup, diagnostics, and the rule that exactly one collector implementation is linked |
+| [ ] | 2 | P1 | compiler / metadata | Define canonical compiler-generated pointer tables | Each supported object type produces unique aligned offsets and the correct element count; compiler tests compare emitted layouts with C `offsetof` and `sizeof` results; duplicate offsets cannot make reference counting visit one field twice |
+| [ ] | 3 | P1 | compiler / integration | Implement a minimal automatic instrumentation pipeline | C inputs containing no hand-written GC calls are lowered, compiled, linked, and executed against all three collectors; fixtures cover scalars, structs, fixed arrays, calls, recursion, and multiple returns |
+| [ ] | 4 | P2 | compiler | Add compatible C features incrementally | Each feature listed as planned in `docs/architecture.md` is enabled separately with positive lowering tests and diagnostics for forms that remain unsupported |
+| [ ] | 5 | P2 | tests | Add model-based cross-collector conformance testing | Generated valid object-graph operations preserve values and reachability across collectors; address movement and reference-cycle retention are treated as documented collector-specific behavior |
