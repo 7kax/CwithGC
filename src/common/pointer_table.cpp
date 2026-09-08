@@ -12,8 +12,9 @@ namespace {
 bool valid_pointer_offsets(std::size_t struct_size, std::size_t num_pointers,
                            const std::size_t *pointer_field_offsets) noexcept {
     for (std::size_t i = 0; i < num_pointers; ++i) {
-        if (pointer_field_offsets[i] > struct_size - sizeof(void *) ||
-            pointer_field_offsets[i] % alignof(void *) != 0)
+        const std::size_t offset = pointer_field_offsets[i];
+        if (offset > struct_size - sizeof(void *) || offset % alignof(void *) != 0 ||
+            (i != 0 && offset <= pointer_field_offsets[i - 1]))
             return false;
     }
     return true;

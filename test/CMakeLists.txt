@@ -146,6 +146,13 @@ endif()
 add_collector_matrix_test(root_slot_initialization
                           conformance/root_slot_initialization.c
                           conformance)
+add_collector_matrix_test(pointer_table_array
+                          conformance/pointer_table_array.c
+                          conformance)
+foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
+    set(POINTER_TABLE_ARRAY_TARGET ${GC_ALGORITHM}_pointer_table_array)
+    set_target_properties(${POINTER_TABLE_ARRAY_TARGET} PROPERTIES C_EXTENSIONS OFF)
+endforeach()
 
 # Reachable runtime failures are executed as child processes so CTest can
 # validate both their termination status and diagnostic output.
@@ -155,6 +162,20 @@ foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
                              failure/oversized_allocation.c)
     add_expected_failure_test(${OVERSIZED_TARGET} ${OVERSIZED_TARGET}
                               "Allocation failure" failure)
+
+    set(DUPLICATE_POINTER_TABLE_TARGET ${GC_ALGORITHM}_duplicate_pointer_table)
+    add_collector_executable(${GC_ALGORITHM} ${DUPLICATE_POINTER_TABLE_TARGET}
+                             failure/duplicate_pointer_table.c)
+    add_expected_failure_test(${DUPLICATE_POINTER_TABLE_TARGET}
+                              ${DUPLICATE_POINTER_TABLE_TARGET}
+                              "Invalid pointer table" failure)
+
+    set(DESCENDING_POINTER_TABLE_TARGET ${GC_ALGORITHM}_descending_pointer_table)
+    add_collector_executable(${GC_ALGORITHM} ${DESCENDING_POINTER_TABLE_TARGET}
+                             failure/descending_pointer_table.c)
+    add_expected_failure_test(${DESCENDING_POINTER_TABLE_TARGET}
+                              ${DESCENDING_POINTER_TABLE_TARGET}
+                              "Invalid pointer table" failure)
 
     set(EXCEPTION_TARGET ${GC_ALGORITHM}_cpp_exception_boundary)
     add_collector_executable(${GC_ALGORITHM} ${EXCEPTION_TARGET}
