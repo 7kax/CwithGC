@@ -1,7 +1,7 @@
 #include "common/layout.hpp"
-#include "common/pointer_table.hpp"
 #include "common/root_set.hpp"
 #include "common/runtime.hpp"
+#include "common/type_descriptor.hpp"
 #include "gc.h"
 #include "gc_debug.h"
 
@@ -20,7 +20,8 @@ namespace {
 constexpr size_t heap_capacity = 4 * 1024;
 
 struct ObjectHeader {
-    const gc_ptr_table *pointer_table;
+    const gc_type_descriptor *type;
+    size_t element_count;
     size_t ref_count;
     size_t size;
 };
@@ -35,21 +36,27 @@ class RefCountState {
         initialized_ = true;
     }
 
-    void *allocate(size_t size) {
+    void *allocate(const gc_type_descriptor *type, size_t element_count) {
         require_initialized();
 
+        const size_t payload_size = gc_type_layout::payload_size(type, element_count);
+
         size_t alloc_size;
-        if (!gc_layout::block_size<ObjectHeader>(size, alloc_size) || alloc_size > heap_capacity ||
-            alloc_size > free_bytes_)
+        if (!gc_layout::block_size<ObjectHeader>(payload_size, alloc_size) ||
+            alloc_size > heap_capacity || alloc_size > free_bytes_)
             gc_runtime::allocation_failure();
 
         auto block = gc_runtime::malloc_bytes<ObjectHeader>(alloc_size);
-        block->pointer_table = nullptr;
+        block->type = type;
+        block->element_count = element_count;
         block->ref_count = 0;
         block->size = alloc_size;
 
         void *payload = gc_layout::payload(block.get());
-        std::memset(payload, 0, size);
+        std::memset(payload, 0, payload_size);
+        gc_type_layout::for_each_pointer(*type, element_count, payload, [](void *slot) noexcept {
+            gc_runtime::store_pointer(slot, nullptr);
+        });
 
         ObjectHeader *header = block.get();
         allocations_.emplace(header, std::move(block));
@@ -67,24 +74,6 @@ class RefCountState {
         require_initialized();
 
         roots_.add(root_slot);
-    }
-
-    void register_object(void *object, const gc_ptr_table *pointer_table) {
-        require_initialized();
-
-        ObjectHeader *header = get_object_header(object);
-        assert(header->pointer_table == nullptr);
-
-        size_t payload_capacity;
-        if (pointer_table == nullptr ||
-            !gc_layout::payload_capacity<ObjectHeader>(header->size, payload_capacity) ||
-            !gc_pointer_table::valid_for_payload(*pointer_table, payload_capacity))
-            gc_runtime::invalid_pointer_table();
-
-        header->pointer_table = pointer_table;
-        gc_pointer_table::for_each_field(*pointer_table, object, [](void *slot) noexcept {
-            gc_runtime::store_pointer(slot, nullptr);
-        });
     }
 
     void assign_pointer(void *destination_slot, void *source) noexcept {
@@ -163,14 +152,12 @@ class RefCountState {
         if (header->ref_count != 0)
             return;
 
-        if (header->pointer_table != nullptr) {
-            gc_pointer_table::for_each_field(*header->pointer_table, ptr,
-                                             [this](void *child_slot) noexcept {
-                                                 void *child = gc_runtime::load_pointer(child_slot);
-                                                 if (child != nullptr)
-                                                     decrement_ref_count(child);
-                                             });
-        }
+        gc_type_layout::for_each_pointer(*header->type, header->element_count, ptr,
+                                         [this](void *child_slot) noexcept {
+                                             void *child = gc_runtime::load_pointer(child_slot);
+                                             if (child != nullptr)
+                                                 decrement_ref_count(child);
+                                         });
 
         const auto allocation = allocations_.find(header);
         assert(allocation != allocations_.end());
@@ -198,7 +185,15 @@ void gc_init(void) noexcept try { state.init(); } catch (...) {
     gc_runtime::handle_current_exception();
 }
 
-void *gc_malloc(size_t size) noexcept try { return state.allocate(size); } catch (...) {
+void *gc_alloc_object(const gc_type_descriptor *type) noexcept try {
+    return state.allocate(type, 1);
+} catch (...) {
+    gc_runtime::handle_current_exception();
+}
+
+void *gc_alloc_array(const gc_type_descriptor *element_type, size_t length) noexcept try {
+    return state.allocate(element_type, length);
+} catch (...) {
     gc_runtime::handle_current_exception();
 }
 
@@ -211,12 +206,6 @@ void gc_scope_end(gc_scope_token token) noexcept try { state.end_scope(token); }
 }
 
 void gc_scope_add_root(void *root_slot) noexcept try { state.add_root(root_slot); } catch (...) {
-    gc_runtime::handle_current_exception();
-}
-
-void gc_register_object(void *object, const gc_ptr_table *pointer_table) noexcept try {
-    state.register_object(object, pointer_table);
-} catch (...) {
     gc_runtime::handle_current_exception();
 }
 

@@ -10,25 +10,23 @@ struct node {
     struct node *right;
 };
 
-static gc_ptr_table *create_pointer_table(void) {
-    const size_t pointer_field_offsets[] = {
-        offsetof(struct node, left),
-        offsetof(struct node, right),
-    };
-    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 2, pointer_field_offsets);
-    TEST_CHECK(table != NULL);
-    return table;
-}
+static const size_t node_pointer_offsets[] = {
+    offsetof(struct node, left),
+    offsetof(struct node, right),
+};
+static const gc_type_descriptor node_type = {
+    sizeof(struct node),
+    sizeof(node_pointer_offsets) / sizeof(node_pointer_offsets[0]),
+    node_pointer_offsets,
+};
 
-static struct node *make_node(int value, gc_ptr_table *pointer_table) {
-    struct node *node = gc_malloc(sizeof(struct node));
-    gc_register_object(node, pointer_table);
+static struct node *make_node(int value) {
+    struct node *node = gc_alloc_object(&node_type);
     node->value = value;
     return node;
 }
 
 int main(void) {
-    gc_ptr_table *pointer_table = create_pointer_table();
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -38,10 +36,10 @@ int main(void) {
     gc_scope_add_root(&right);
     gc_scope_add_root(&leaf);
 
-    gc_pointer_assign(&root, make_node(1, pointer_table));
-    gc_pointer_assign(&left, make_node(2, pointer_table));
-    gc_pointer_assign(&right, make_node(3, pointer_table));
-    gc_pointer_assign(&leaf, make_node(4, pointer_table));
+    gc_pointer_assign(&root, make_node(1));
+    gc_pointer_assign(&left, make_node(2));
+    gc_pointer_assign(&right, make_node(3));
+    gc_pointer_assign(&leaf, make_node(4));
 
     gc_pointer_assign(&root->left, left);
     gc_pointer_assign(&root->right, right);
@@ -76,8 +74,6 @@ int main(void) {
 
     gc_scope_end(scope);
     gc_cleanup();
-    gc_ptr_table_destroy(pointer_table);
-
     puts("Copying graph test passed!");
     return 0;
 }

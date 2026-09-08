@@ -1,4 +1,5 @@
 #include "../test_check.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stddef.h>
@@ -12,9 +13,9 @@ int main(void) {
     gc_init();
 
     gc_scope_token first_scope = gc_scope_begin();
-    void *first_root;
+    unsigned char *first_root;
     gc_scope_add_root(&first_root);
-    gc_pointer_assign(&first_root, gc_malloc(32));
+    gc_pointer_assign(&first_root, gc_alloc_array(test_gc_byte_type(), 32));
     TEST_CHECK(first_root != NULL);
     gc_collect();
     TEST_CHECK(first_root != NULL);
@@ -23,10 +24,10 @@ int main(void) {
     // Reinitialization releases the old heap/allocations and root storage.
     gc_init();
 
-    void *second_root;
+    unsigned char *second_root;
     gc_scope_token second_scope = gc_scope_begin();
     gc_scope_add_root(&second_root);
-    gc_pointer_assign(&second_root, gc_malloc(64));
+    gc_pointer_assign(&second_root, gc_alloc_array(test_gc_byte_type(), 64));
     TEST_CHECK(second_root != NULL);
     gc_collect();
     TEST_CHECK(second_root != NULL);

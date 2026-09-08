@@ -120,7 +120,7 @@ endif()
 add_collector_matrix_test(alignment conformance/alignment.c conformance)
 add_collector_matrix_test(lifecycle conformance/lifecycle.c conformance)
 add_collector_matrix_test(scope_lifetime conformance/scope_lifetime.c conformance)
-add_collector_matrix_test(registered_graph conformance/registered_graph.c conformance)
+add_collector_matrix_test(typed_graph conformance/typed_graph.c conformance)
 add_collector_matrix_test(reclamation_pressure conformance/reclamation_pressure.c conformance)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
@@ -146,12 +146,12 @@ endif()
 add_collector_matrix_test(root_slot_initialization
                           conformance/root_slot_initialization.c
                           conformance)
-add_collector_matrix_test(pointer_table_array
-                          conformance/pointer_table_array.c
+add_collector_matrix_test(typed_array
+                          conformance/typed_array.c
                           conformance)
 foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
-    set(POINTER_TABLE_ARRAY_TARGET ${GC_ALGORITHM}_pointer_table_array)
-    set_target_properties(${POINTER_TABLE_ARRAY_TARGET} PROPERTIES C_EXTENSIONS OFF)
+    set(TYPED_ARRAY_TARGET ${GC_ALGORITHM}_typed_array)
+    set_target_properties(${TYPED_ARRAY_TARGET} PROPERTIES C_EXTENSIONS OFF)
 endforeach()
 
 # Reachable runtime failures are executed as child processes so CTest can
@@ -163,27 +163,23 @@ foreach(GC_ALGORITHM IN LISTS GC_ALGORITHMS)
     add_expected_failure_test(${OVERSIZED_TARGET} ${OVERSIZED_TARGET}
                               "Allocation failure" failure)
 
-    set(DUPLICATE_POINTER_TABLE_TARGET ${GC_ALGORITHM}_duplicate_pointer_table)
-    add_collector_executable(${GC_ALGORITHM} ${DUPLICATE_POINTER_TABLE_TARGET}
-                             failure/duplicate_pointer_table.c)
-    add_expected_failure_test(${DUPLICATE_POINTER_TABLE_TARGET}
-                              ${DUPLICATE_POINTER_TABLE_TARGET}
-                              "Invalid pointer table" failure)
+    set(ZERO_LENGTH_TARGET ${GC_ALGORITHM}_zero_length_array)
+    add_collector_executable(${GC_ALGORITHM} ${ZERO_LENGTH_TARGET}
+                             failure/zero_length_array.c)
+    add_expected_failure_test(${ZERO_LENGTH_TARGET} ${ZERO_LENGTH_TARGET}
+                              "Allocation failure" failure)
 
-    set(DESCENDING_POINTER_TABLE_TARGET ${GC_ALGORITHM}_descending_pointer_table)
-    add_collector_executable(${GC_ALGORITHM} ${DESCENDING_POINTER_TABLE_TARGET}
-                             failure/descending_pointer_table.c)
-    add_expected_failure_test(${DESCENDING_POINTER_TABLE_TARGET}
-                              ${DESCENDING_POINTER_TABLE_TARGET}
-                              "Invalid pointer table" failure)
+    set(ARRAY_OVERFLOW_TARGET ${GC_ALGORITHM}_array_size_overflow)
+    add_collector_executable(${GC_ALGORITHM} ${ARRAY_OVERFLOW_TARGET}
+                             failure/array_size_overflow.c)
+    add_expected_failure_test(${ARRAY_OVERFLOW_TARGET} ${ARRAY_OVERFLOW_TARGET}
+                              "Allocation failure" failure)
 
     set(EXCEPTION_TARGET ${GC_ALGORITHM}_cpp_exception_boundary)
     add_collector_executable(${GC_ALGORITHM} ${EXCEPTION_TARGET}
                              failure/cpp_exception_boundary.cpp)
     add_expected_failure_test(${EXCEPTION_TARGET}_root ${EXCEPTION_TARGET}
                               "Allocation failure" failure root)
-    add_expected_failure_test(${EXCEPTION_TARGET}_pointer_table ${EXCEPTION_TARGET}
-                              "Allocation failure" failure pointer-table)
 endforeach()
 
 if(GC_ENABLE_INSPECTION)

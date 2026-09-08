@@ -5,7 +5,7 @@ in C++20 with reference-counting, copying, and mark-and-sweep collectors.
 
 See [the architecture document](docs/architecture.md) for the managed-pointer model, compiler
 responsibilities, and the distinction between planned and fundamentally unsupported C features.
-The precise generated-call contract is specified in [Compiler-Runtime ABI v1](docs/abi.md).
+The precise generated-call contract is specified in [Compiler-Runtime ABI v2](docs/abi.md).
 
 ## Build and Test
 
@@ -86,25 +86,27 @@ must invoke `gc_init()` before lifecycle-dependent operations. A repeated `gc_in
 runtime, releasing the old state and invalidating its managed pointers and scope tokens.
 `gc_cleanup()` is idempotent, releases all managed memory and active roots, and invalidates every
 managed pointer. A subsequent generated execution must initialize the runtime again before using it.
-Pointer-table creation and destruction are independent of this lifecycle, but compiler-generated
-metadata must remain alive while a registered object can be visited.
+Compiler-generated type descriptors use static storage and remain alive while the runtime can visit
+allocations that reference them.
 
 The following shows the shape of calls emitted around one instrumented local; it is an ABI smoke
 sequence, not application code. Generated code opens and closes scopes in LIFO order, registers
 each pointer slot before storing a managed pointer, and routes every managed-pointer assignment
-through `gc_pointer_assign()`. For the copying collector, only registered roots and fields are
-updated when objects move.
+through `gc_pointer_assign()`. For the copying collector, only registered roots and described
+fields are updated when objects move.
 
 ```c
 #include "gc.h"
 
 void instrumented_entry(void) {
+    static const gc_type_descriptor byte_type = {sizeof(unsigned char), 0, NULL};
+
     /* Emitted program-start and local-scope instrumentation. */
     gc_init();
     gc_scope_token scope = gc_scope_begin();
-    void *slot = NULL;
+    unsigned char *slot = NULL;
     gc_scope_add_root(&slot);
-    gc_pointer_assign(&slot, gc_malloc(32));
+    gc_pointer_assign(&slot, gc_alloc_array(&byte_type, 32));
 
     /* An instrumentation/runtime collection point. */
     gc_collect();

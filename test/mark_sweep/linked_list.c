@@ -9,22 +9,19 @@ struct node {
     struct node *next;
 };
 
-gc_ptr_table *create_pointer_table(void) {
-    const size_t pointer_field_offsets[] = {offsetof(struct node, next)};
-    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, pointer_field_offsets);
-    TEST_CHECK(table != NULL);
-    return table;
-}
-
-gc_ptr_table *pointer_table = NULL;
+static const size_t node_pointer_offsets[] = {offsetof(struct node, next)};
+static const gc_type_descriptor node_type = {
+    sizeof(struct node),
+    sizeof(node_pointer_offsets) / sizeof(node_pointer_offsets[0]),
+    node_pointer_offsets,
+};
 
 struct node *make_node(int data) {
     gc_scope_token scope = gc_scope_begin();
     struct node *new_node;
     gc_scope_add_root(&new_node);
 
-    gc_pointer_assign(&new_node, gc_malloc(sizeof(struct node)));
-    gc_register_object(new_node, pointer_table);
+    gc_pointer_assign(&new_node, gc_alloc_object(&node_type));
 
     new_node->data = data;
 
@@ -36,8 +33,6 @@ struct node *make_node(int data) {
 int main(void) {
     int elements[] = {1, 2, 3, 4, 5};
     const size_t n = 5;
-    pointer_table = create_pointer_table();
-
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -72,7 +67,6 @@ int main(void) {
 
     gc_scope_end(scope);
     gc_cleanup();
-    gc_ptr_table_destroy(pointer_table);
     puts("Mark-sweep linked list test passed!");
 
     return 0;

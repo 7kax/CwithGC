@@ -10,21 +10,19 @@ struct graph_node {
     struct graph_node *right;
 };
 
-static gc_ptr_table *create_pointer_table(void) {
-    const size_t pointer_field_offsets[] = {
-        offsetof(struct graph_node, left),
-        offsetof(struct graph_node, right),
-    };
-    gc_ptr_table *table =
-        gc_ptr_table_create(1, sizeof(struct graph_node), 2, pointer_field_offsets);
-    TEST_CHECK(table != NULL);
-    return table;
-}
+static const size_t graph_node_pointer_offsets[] = {
+    offsetof(struct graph_node, left),
+    offsetof(struct graph_node, right),
+};
+static const gc_type_descriptor graph_node_type = {
+    sizeof(struct graph_node),
+    sizeof(graph_node_pointer_offsets) / sizeof(graph_node_pointer_offsets[0]),
+    graph_node_pointer_offsets,
+};
 
-static void allocate_node(struct graph_node **slot, int value, gc_ptr_table *table) {
-    gc_pointer_assign(slot, gc_malloc(sizeof(struct graph_node)));
+static void allocate_node(struct graph_node **slot, int value) {
+    gc_pointer_assign(slot, gc_alloc_object(&graph_node_type));
     TEST_CHECK(*slot != NULL);
-    gc_register_object(*slot, table);
     (*slot)->value = value;
 }
 
@@ -47,8 +45,6 @@ static void check_graph(const struct graph_node *root, const struct graph_node *
 }
 
 int main(void) {
-    gc_ptr_table *table = create_pointer_table();
-
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -63,10 +59,10 @@ int main(void) {
     gc_scope_add_root(&leaf);
     gc_scope_add_root(&shared);
 
-    allocate_node(&root, 1, table);
-    allocate_node(&left, 2, table);
-    allocate_node(&right, 3, table);
-    allocate_node(&leaf, 4, table);
+    allocate_node(&root, 1);
+    allocate_node(&left, 2);
+    allocate_node(&right, 3);
+    allocate_node(&leaf, 4);
 
     gc_pointer_assign(&root->left, left);
     gc_pointer_assign(&root->right, right);
@@ -74,9 +70,9 @@ int main(void) {
     gc_pointer_assign(&right->right, leaf);
     gc_pointer_assign(&shared, leaf);
 
-    // Keep the graph reachable through root and a registered alias to the
-    // shared child. Both roots and all pointer fields must be rewritten if a
-    // copying collector relocates the graph.
+    // Keep the graph reachable through root and a rooted alias to the shared
+    // child. Both roots and all pointer fields must be rewritten if a copying
+    // collector relocates the graph.
     gc_pointer_assign(&left, NULL);
     gc_pointer_assign(&right, NULL);
     gc_pointer_assign(&leaf, NULL);
@@ -89,8 +85,8 @@ int main(void) {
         TEST_CHECK(root->left->left == shared);
     }
 
-    // The graph remains reachable through root after the extra registered
-    // alias is released, so the shared child must still be visited by metadata.
+    // The graph remains reachable through root after the extra rooted alias is
+    // released, so the shared child must still be visited by metadata.
     gc_pointer_assign(&shared, NULL);
     for (size_t round = 0; round < 4; round++) {
         gc_collect();
@@ -101,8 +97,6 @@ int main(void) {
     gc_collect();
     gc_scope_end(scope);
     gc_cleanup();
-    gc_ptr_table_destroy(table);
-
-    puts("Registered graph test passed!");
+    puts("Typed graph test passed!");
     return 0;
 }

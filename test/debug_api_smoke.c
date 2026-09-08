@@ -1,5 +1,6 @@
 #include "gc_debug.h"
 #include "test_check.h"
+#include "test_types.h"
 
 #include <stddef.h>
 
@@ -46,9 +47,9 @@ int main(void) {
     TEST_CHECK(stats.root_count == 0);
 
     gc_scope_token scope = gc_scope_begin();
-    void *root;
+    unsigned char *root;
     gc_scope_add_root(&root);
-    gc_pointer_assign(&root, gc_malloc(1));
+    gc_pointer_assign(&root, gc_alloc_object(test_gc_byte_type()));
 
     TEST_CHECK(gc_debug_snapshot_memory_layout(&layout) == GC_DEBUG_OK);
     TEST_CHECK(layout.block_count > 0);

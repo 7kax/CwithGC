@@ -1,4 +1,4 @@
-# Compiler-Runtime ABI v1
+# Compiler-Runtime ABI v2
 
 ## Scope and ownership
 
@@ -10,56 +10,76 @@ The manually written C fixtures under `test/` model the code that such a lowerin
 `include/gc_debug.h` is separate from this ABI. It is an optional inspection interface for tests
 and diagnostic tools and is not required by generated programs.
 
-The runtime exposes one process-global collector instance. A program links exactly one of the
-collector implementations, and all implementations export the same `gc_*` symbols. The ABI is
-single-threaded and generated code must serialize operations on the instance. C++ implementation
-types, templates, containers, and exceptions never cross the C boundary.
+The runtime exposes one process-global collector instance. A program links exactly one collector,
+and all collector implementations export the same `gc_*` symbols. The ABI is single-threaded and
+generated code must serialize operations on the instance. C++ implementation types, containers,
+and exceptions never cross the C boundary.
 
-## Supported v1 lowering
+## Supported v2 lowering
 
-The v1 contract covers generated code for complete, statically known C object types whose alignment
-does not exceed `_Alignof(max_align_t)`:
+The v2 contract covers generated code for complete C object types whose alignment does not exceed
+`_Alignof(max_align_t)`:
 
-- pointer-free scalar allocations;
-- structs and fixed-size arrays of structs with direct managed-pointer fields;
-- nested object graphs assembled through registered pointer fields; and
+- pointer-free scalar and aggregate objects;
+- individual structures and arrays whose length is known at allocation time;
+- structures and fixed-size subarrays containing managed pointer fields;
+- nested object graphs assembled through described pointer fields; and
 - local root scopes whose storage has a stable address for the scope lifetime.
 
-The generated program may use ordinary C control flow, calls, and recursion when it emits the
-corresponding scope cleanup on every edge that leaves a managed scope. Variable-length layouts,
-nonlocal jumps, uninstrumented calls retaining managed addresses, and other forms listed as
-unimplemented or incompatible in [the architecture policy](architecture.md) are outside v1.
+Variable-length arrays as local objects, flexible array members, nonlocal jumps, and other forms
+listed as unimplemented or incompatible in [the architecture policy](architecture.md) remain
+outside v2. A runtime array allocation may nevertheless receive a dynamically computed element
+count because its element layout is still statically known.
 
-## Object layout and pointer tables
+## Static type descriptors
 
-For each exact pointer-bearing object type `T`, the compiler emits one canonical
-`gc_ptr_table_create()` descriptor and may share it across allocations of `T`:
+For every allocated element type `T`, the compiler emits one immutable `gc_type_descriptor` and may
+share it across all object and array allocations of `T`:
 
-- `struct_size` is exactly `sizeof(T)`;
-- `array_len` is exactly the number of contiguous `T` elements in the allocation;
-- the requested payload size is exactly `array_len * sizeof(T)`; and
-- every entry is the byte offset of a direct pointer field, obtained from `offsetof(T, field)`.
+- `element_size` is exactly `sizeof(T)` and is greater than zero;
+- `pointer_count` is the number of managed pointer fields recursively contained in one `T`;
+- `pointer_offsets` points to a static array of that many byte offsets, or is null when the count is
+  zero; and
+- each offset identifies a complete, naturally aligned managed pointer field within `T`.
 
-The offset sequence is strictly increasing, naturally aligned for a pointer, in bounds for one
-complete field, and therefore unique. The sequence is deterministic for a given source type. The
-runtime rejects malformed shape and capacity values, but it cannot infer `T` from an opaque payload
-or prove that a caller supplied the source-level `sizeof` and element count. Those exact-type and
-element-count properties are compiler invariants. Over-aligned managed types (for example, a type
-requiring `_Alignas` beyond `max_align_t`) are outside v1 and must be rejected by the compiler.
+Offsets include managed fields nested inside structures and fixed-size subarrays. They are emitted
+in strictly increasing order and are unique. The descriptor and its offset array remain valid until
+`gc_cleanup()` has made all corresponding allocations unreachable. Static storage duration is the
+canonical lowering.
 
-The generic slot ABI carries pointer values as opaque object representations. A v1 target must
+The runtime rejects a null descriptor, zero element size, or a missing nonempty offset array. It
+does not rediscover source types or validate individual compiler-generated offsets. Exact sizes,
+canonical offsets, alignment, and descriptor lifetime are compiler invariants.
+
+The generic slot ABI carries pointer values as opaque object representations. A v2 target must
 provide the same size and representation for every managed object-pointer type and `void *`; the
-compiler must reject a target/type combination that does not satisfy this requirement. The runtime
-uses byte-wise loads and stores for slots, so it does not alias a typed pointer object as `void **`.
-This is a target qualification rather than a runtime assertion because C11 has no portable predicate
-for comparing pointer representations. Function pointers are not managed object pointers and are
-outside this requirement.
+compiler must reject target/type combinations that do not satisfy this requirement. The runtime
+uses byte-wise loads and stores so it does not alias a typed pointer object as `void **`. Function
+pointers are not managed object pointers.
 
-The compiler creates the descriptor before registering an object and keeps it alive until
-`gc_cleanup()` has made every registered object unreachable. A table must not be destroyed while
-the collector could still visit an object that refers to it. Pointer-free objects do not need a
-pointer table; every object with managed fields must be registered before a collection can observe
-it.
+## Typed allocation
+
+Lower one standalone `T` allocation to `gc_alloc_object(&descriptor_for_T)`. Lower an allocation of
+`length` consecutive `T` elements to `gc_alloc_array(&descriptor_for_T, length)`.
+
+The array length is an allocation property rather than a type property. The runtime stores it in
+the allocation header and scans each element at:
+
+```text
+payload + element_index * element_size
+```
+
+It then visits every `pointer_offsets[pointer_index]` relative to that element. A single-object
+allocation uses an element count of one. A zero-length array, a multiplication overflow, or a
+request larger than the collector capacity reaches the allocation-failure path.
+
+Allocation atomically installs the descriptor and element count before returning. Payload bytes are
+zeroed, and each described slot is additionally written with the target's null pointer
+representation. There is no separate object-registration phase and no untyped byte-allocation ABI.
+
+A managed `T *` may denote a standalone `T` or the first element of an allocated `T` array. Only
+the allocation base may persist in a root or managed field. Interior and one-past pointers may be
+used as transient derived values but must not escape or survive a safe point.
 
 ## Lifecycle and root lowering
 
@@ -70,51 +90,40 @@ teardown calls `gc_cleanup()`, which is idempotent and releases all managed memo
 For each lexical region containing managed locals, lowering emits:
 
 1. `gc_scope_begin()` on entry;
-2. one `gc_scope_add_root(&slot)` for every managed local slot before its first assignment;
+2. one `gc_scope_add_root(&slot)` for every managed local before its first assignment;
 3. all assignments to those slots through `gc_pointer_assign()`; and
 4. `gc_scope_end()` exactly once on every exit, in reverse nesting order.
 
-Adding a root immediately clears the slot. The slot's address and storage must remain valid until
-the matching scope ends. Scope cleanup therefore has to be emitted for normal fallthrough,
-`return`, `break`, `continue`, and `goto` edges that leave the scope. A slot removed by
-`gc_scope_end()` no longer keeps its object alive.
+Adding a root immediately clears the slot. Its address and storage remain valid until the matching
+scope ends. Scope cleanup must therefore be emitted for normal fallthrough, `return`, `break`,
+`continue`, and `goto` edges that leave the scope.
 
 ## Safe points and pointer stores
 
-`gc_malloc()` and `gc_collect()` are collection safe points. A moving collector may relocate any
-reachable object at either operation. Only exact object-start pointers in registered root slots or
-registered object fields are discoverable and rewritten. Generated code must not retain an
-unregistered managed alias across a safe point; it must reload the value from its registered slot
-or field afterward.
+`gc_alloc_object()`, `gc_alloc_array()`, and `gc_collect()` are collection safe points. A moving
+collector may relocate any reachable allocation at these operations. Only allocation-base pointers
+in registered root slots or described object fields are discovered and rewritten. Generated code
+must reload managed values after a safe point instead of retaining unregistered aliases.
 
-When a destination slot is inside a managed object, lowering must finish every allocation or other
-safe-point expression before forming that slot address. In particular, it must allocate into a
-temporary first, then reload the host object from its registered slot or field and form the field
-address for `gc_pointer_assign()`. An expression such as
-`gc_pointer_assign(&object->field, gc_malloc(size))` can leave the destination address in from-space
-when a copying collector moves `object` during `gc_malloc()` and is not valid v1 lowering.
+When a destination slot is inside a managed object, lowering first evaluates every allocation or
+other safe-point expression, then reloads the host object and forms the destination address. It
+must not combine a potentially moving allocation with a previously formed field address.
 
-Every managed-pointer initialization, replacement, and clear operation is emitted as
-`gc_pointer_assign(destination, source)`. The destination must be a registered root slot or a field
-described by its object's table. The source must be null or a currently live managed payload. A
-direct C assignment to a managed pointer bypasses collector bookkeeping and is not a v1 lowering.
+Every managed-pointer initialization, replacement, and clear is emitted as
+`gc_pointer_assign(destination, source)`. The destination is a registered root or a field named by
+the allocation's descriptor. The source is null or a live allocation base. Direct C assignment to
+a managed pointer bypasses collector bookkeeping and is not valid v2 lowering.
 
-The compiler emits object registration before a collection can traverse the object. `gc_malloc()`
-zero-initializes the payload bytes, and registration writes the null representation to every
-described pointer field; subsequent field writes still use `gc_pointer_assign()`.
+## Failure and collector selection
 
-## Failure and collector-selection contract
+Exported ABI functions are `noexcept` at the C++ boundary and never propagate C++ exceptions.
+Allocation failure, a structurally unusable descriptor, invalid scope order, and checked lifecycle
+violations print a diagnostic to standard error and terminate the process. These guards do not
+replace compiler validation of source types, pointer provenance, or control-flow lowering.
 
-The exported ABI functions are `noexcept` at the C++ boundary and never propagate C++ exceptions.
-Allocation failure, invalid pointer-table shape, invalid scope order, and checked lifecycle
-violations print a diagnostic to standard error and terminate the process. These checks are cheap
-runtime guards; they do not replace compiler validation of source-level types, pointer provenance,
-or control-flow lowering.
+An instrumented program links one and only one collector target. Collectors may differ in
+reclamation strategy and object movement, but they honor the same root, descriptor, typed
+allocation, and pointer-assignment contract.
 
-An instrumented program must link one and only one collector target. Linking multiple collector
-implementations would define the same global ABI symbols more than once and is unsupported. The
-selected collector may differ in reclamation strategy and object movement, but it must honor the
-same root, layout, and pointer-assignment contract above.
-
-This document freezes the source-level v1 lowering contract. Any incompatible ABI change requires
+This document freezes the source-level v2 lowering contract. Any incompatible ABI change requires
 an explicit contract revision and regenerated instrumented code.

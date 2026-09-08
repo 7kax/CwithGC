@@ -1,4 +1,5 @@
 #include "../test_layout.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stdio.h>
@@ -52,9 +53,9 @@ int main(void) {
     TEST_CHECK(ptr2 == NULL);
     TEST_CHECK(ptr3 == NULL);
 
-    gc_pointer_assign(&ptr1, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr2, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr3, gc_malloc(sizeof(int)));
+    gc_pointer_assign(&ptr1, gc_alloc_object(test_gc_int_type()));
+    gc_pointer_assign(&ptr2, gc_alloc_object(test_gc_int_type()));
+    gc_pointer_assign(&ptr3, gc_alloc_object(test_gc_int_type()));
 
     TEST_CHECK(ptr1 != NULL);
     TEST_CHECK(ptr2 != NULL);

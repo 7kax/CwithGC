@@ -8,11 +8,14 @@ struct node {
     struct node *next;
 };
 
-int main(void) {
-    const size_t pointer_field_offsets[] = {offsetof(struct node, next)};
-    gc_ptr_table *table = gc_ptr_table_create(1, sizeof(struct node), 1, pointer_field_offsets);
-    TEST_CHECK(table != NULL);
+static const size_t node_pointer_offsets[] = {offsetof(struct node, next)};
+static const gc_type_descriptor node_type = {
+    sizeof(struct node),
+    sizeof(node_pointer_offsets) / sizeof(node_pointer_offsets[0]),
+    node_pointer_offsets,
+};
 
+int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -21,10 +24,8 @@ int main(void) {
     gc_scope_add_root(&first);
     gc_scope_add_root(&second);
 
-    gc_pointer_assign(&first, gc_malloc(sizeof(*first)));
-    gc_register_object(first, table);
-    gc_pointer_assign(&second, gc_malloc(sizeof(*second)));
-    gc_register_object(second, table);
+    gc_pointer_assign(&first, gc_alloc_object(&node_type));
+    gc_pointer_assign(&second, gc_alloc_object(&node_type));
 
     gc_pointer_assign(&first->next, second);
     gc_pointer_assign(&second->next, first);
@@ -46,8 +47,6 @@ int main(void) {
     TEST_CHECK(test_gc_reclaimed_block_count() == reclaimed_count);
 
     gc_cleanup();
-    gc_ptr_table_destroy(table);
-
     puts("Reference counting cycle test passed!");
     return 0;
 }

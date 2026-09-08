@@ -1,4 +1,5 @@
 #include "../test_debug.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stddef.h>
@@ -9,7 +10,7 @@ void allocate_unrooted_scalar(void) {
     int *ptr;
     gc_scope_add_root(&ptr);
 
-    gc_pointer_assign(&ptr, gc_malloc(sizeof(int) * 10));
+    gc_pointer_assign(&ptr, gc_alloc_array(test_gc_int_type(), 10));
 
     gc_scope_end(scope);
 }

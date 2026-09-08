@@ -1,4 +1,5 @@
 #include "../test_layout.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stdio.h>
@@ -15,24 +16,19 @@ struct pointer_object {
     int *h;
 };
 
-gc_ptr_table *pointer_table = NULL;
-
-gc_ptr_table *create_pointer_table(void) {
-    const size_t pointer_field_offsets[] = {
-        offsetof(struct pointer_object, b), offsetof(struct pointer_object, c),
-        offsetof(struct pointer_object, d), offsetof(struct pointer_object, e),
-        offsetof(struct pointer_object, f), offsetof(struct pointer_object, g),
-        offsetof(struct pointer_object, h),
-    };
-    gc_ptr_table *table =
-        gc_ptr_table_create(1, sizeof(struct pointer_object), 7, pointer_field_offsets);
-    TEST_CHECK(table != NULL);
-    return table;
-}
+static const size_t pointer_object_offsets[] = {
+    offsetof(struct pointer_object, b), offsetof(struct pointer_object, c),
+    offsetof(struct pointer_object, d), offsetof(struct pointer_object, e),
+    offsetof(struct pointer_object, f), offsetof(struct pointer_object, g),
+    offsetof(struct pointer_object, h),
+};
+static const gc_type_descriptor pointer_object_type = {
+    sizeof(struct pointer_object),
+    sizeof(pointer_object_offsets) / sizeof(pointer_object_offsets[0]),
+    pointer_object_offsets,
+};
 
 int main(void) {
-    pointer_table = create_pointer_table();
-
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
@@ -40,8 +36,7 @@ int main(void) {
 
     struct pointer_object *ptr;
     gc_scope_add_root(&ptr);
-    gc_pointer_assign(&ptr, gc_malloc(sizeof(struct pointer_object)));
-    gc_register_object(ptr, pointer_table);
+    gc_pointer_assign(&ptr, gc_alloc_object(&pointer_object_type));
 
     TEST_CHECK(ptr->a == 0);
     TEST_CHECK(ptr->b == NULL);
@@ -58,15 +53,15 @@ int main(void) {
 
     // Allocate and initialize nested references.
     {
-        int *temporary = gc_malloc(sizeof(int));
+        int *temporary = gc_alloc_object(test_gc_int_type());
         gc_pointer_assign(&ptr->b, temporary);
     }
     {
-        int *temporary = gc_malloc(sizeof(int));
+        int *temporary = gc_alloc_object(test_gc_int_type());
         gc_pointer_assign(&ptr->c, temporary);
     }
     {
-        int *temporary = gc_malloc(sizeof(int));
+        int *temporary = gc_alloc_object(test_gc_int_type());
         gc_pointer_assign(&ptr->d, temporary);
     }
     TEST_CHECK(test_gc_reclaimed_block_count() == 0);
@@ -100,8 +95,6 @@ int main(void) {
 
     gc_scope_end(scope);
     gc_cleanup();
-    gc_ptr_table_destroy(pointer_table);
-
     puts("Reference counting recursion test passed!");
 
     return 0;

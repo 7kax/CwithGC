@@ -12,13 +12,13 @@ extern "C" {
 #include <stdint.h>
 
 /*
- * Compiler/instrumentation ABI v1 contract:
+ * Compiler/instrumentation ABI v2 contract:
  *
  * This is a low-level ABI for compiler-generated calls and compiler-inserted
  * instrumentation. It is not a general-purpose application allocation API.
  * A language runtime or instrumentation pass lowers managed allocations,
  * pointer updates, and local-root lifetimes to these operations.
- * ABI v1 requires every managed object-pointer type used in a slot to have the
+ * ABI v2 requires every managed object-pointer type used in a slot to have the
  * same size and representation as void *. Function pointers are not managed
  * object pointers. The compiler must reject targets that do not provide this
  * representation invariant.
@@ -41,50 +41,23 @@ extern "C" {
  * cannot all be validated by the runtime; violating one is invalid behavior.
  */
 
-// Opaque description of pointer fields in a struct or an array of structs.
-typedef struct gc_ptr_table gc_ptr_table;
+/**
+ * @brief Immutable compiler-generated description of one complete element type.
+ *
+ * element_size is sizeof(T). pointer_offsets contains pointer_count canonical,
+ * strictly increasing byte offsets of managed pointer fields within T. A
+ * pointer-free type has pointer_count equal to zero and pointer_offsets equal
+ * to null. The descriptor and its offset array must have static storage
+ * duration because managed allocations retain the descriptor address.
+ */
+typedef struct {
+    size_t element_size;
+    size_t pointer_count;
+    const size_t *pointer_offsets;
+} gc_type_descriptor;
 
 // Opaque lifetime token for one active local-root scope.
 typedef uint64_t gc_scope_token;
-
-/**
- * @brief Create immutable pointer metadata for instrumented objects.
- *
- * The pointer_field_offsets array is copied. ABI v1 requires its entries to be
- * strictly increasing and unique. Each offset must name a complete, naturally
- * aligned pointer field inside the exact element type. The compiler emits each
- * offset from offsetof(T, field), passes sizeof(T) as struct_size, and passes
- * the exact number of contiguous elements as array_len. For an array,
- * struct_size must preserve pointer alignment between elements.
- * array_len, struct_size and num_pointers must all be greater than zero.
- * Invalid input and allocation failure terminate the process according to the
- * C ABI failure contract. The runtime can check shape and payload capacity but
- * cannot infer the source type or prove that sizeof(T) and array_len are exact;
- * those are compiler invariants.
- *
- * A table may be shared by any number of registered objects with the same exact
- * object layout. Compiler-generated metadata must remain alive until those
- * objects can no longer be visited by the collector. The simplest valid
- * lifetime is to destroy tables after gc_cleanup(). This function is
- * independent of the collector lifecycle and does not require gc_init().
- *
- * @param array_len Number of consecutive structs described by the table.
- * @param struct_size Size of one struct in bytes.
- * @param num_pointers Number of pointer-field offsets.
- * @param pointer_field_offsets Pointer-field offsets, normally produced by offsetof().
- * @return Newly allocated pointer table.
- */
-gc_ptr_table *gc_ptr_table_create(size_t array_len, size_t struct_size, size_t num_pointers,
-                                  const size_t *pointer_field_offsets) CWITHGC_NOEXCEPT;
-
-/**
- * @brief Destroy compiler-generated pointer metadata.
- *
- * Passing null is allowed. Destroying a table still referenced by a registered
- * object is invalid. This function is independent of the collector lifecycle;
- * the table must not be accessed after this call.
- */
-void gc_ptr_table_destroy(gc_ptr_table *table) CWITHGC_NOEXCEPT;
 
 /**
  * @brief Initialize or restart the garbage-collection runtime.
@@ -121,27 +94,39 @@ gc_scope_token gc_scope_begin(void) CWITHGC_NOEXCEPT;
 void gc_scope_end(gc_scope_token token) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Allocate a zero-initialized payload for instrumented code.
+ * @brief Allocate one zero-initialized managed object.
  *
- * The returned address points to the payload, not collector metadata. For a
- * pointer-bearing type, the generated request is exactly array_len times the
- * type's sizeof, and the object is registered with its canonical table before
- * a collection can observe it. The payload is zero-initialized for the
- * requested number of bytes and is aligned for _Alignof(max_align_t); over-
- * aligned managed types are outside ABI v1 and must be rejected by the
- * compiler. Registration writes the null representation to described pointer
- * fields. The payload is owned by the collector and must not be passed to
- * free(). The generated code must protect the pointer with gc_scope_add_root()
- * or store it in a registered pointer field before another allocation or
- * collection can occur.
+ * type must point to valid, immutable compiler-generated metadata with static
+ * storage duration. Allocation and layout installation are atomic from the
+ * collector's perspective. The returned payload is aligned for
+ * _Alignof(max_align_t), its non-pointer bytes are zeroed, and every described
+ * managed pointer field contains the target's null pointer representation.
+ * Over-aligned managed types are outside ABI v2.
  *
- * Requests that cannot be represented or do not fit in the collector heap
- * terminate the process according to the C ABI failure contract.
+ * The returned address is owned by the collector and must not be passed to
+ * free(). Generated code must root or store it before another safe point.
  *
- * @param size Number of payload bytes to allocate.
+ * @param type Static descriptor for the complete allocated type.
  * @return The managed payload address.
  */
-void *gc_malloc(size_t size) CWITHGC_NOEXCEPT;
+void *gc_alloc_object(const gc_type_descriptor *type) CWITHGC_NOEXCEPT;
+
+/**
+ * @brief Allocate a zero-initialized managed array.
+ *
+ * element_type describes one complete array element. length is stored in the
+ * allocation metadata and used to traverse every element. It must be greater
+ * than zero, and length times element_size must be representable as size_t and
+ * fit in the selected collector heap. The returned managed pointer denotes the
+ * first element; persistent interior and one-past pointers are outside ABI v2.
+ * All other ownership, alignment, initialization, and safe-point rules are the
+ * same as for gc_alloc_object().
+ *
+ * @param element_type Static descriptor for one complete array element.
+ * @param length Number of elements to allocate.
+ * @return The managed array base address.
+ */
+void *gc_alloc_array(const gc_type_descriptor *element_type, size_t length) CWITHGC_NOEXCEPT;
 
 /**
  * @brief Register an instrumented local pointer slot with the active scope.
@@ -159,40 +144,24 @@ void *gc_malloc(size_t size) CWITHGC_NOEXCEPT;
 void gc_scope_add_root(void *root_slot) CWITHGC_NOEXCEPT;
 
 /**
- * @brief Attach compiler-generated pointer metadata to a managed payload.
- *
- * object must be the exact payload address returned by gc_malloc(). pointer_table
- * must be a table created by gc_ptr_table_create(), and that table must remain
- * alive for as long as the object can be visited by the collector. Register an
- * object at most once. Registration does not root the object; generated code
- * must retain it in a root slot or another registered pointer field before a
- * collection.
- *
- * @param object Exact managed payload address.
- * @param pointer_table Immutable table describing the payload's pointer fields.
- */
-void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC_NOEXCEPT;
-
-/**
  * @brief Record an instrumented managed-pointer assignment.
  *
  * destination_slot must identify either a root slot previously added with
- * gc_scope_add_root() or a pointer field inside a registered payload, and the field
- * must be described by that payload's pointer table. source must be null or a
- * pointer to a currently live managed payload (an address returned by
- * gc_malloc() or written by the collector into a registered slot). Every
- * assignment, replacement, and clearing of a managed pointer must use this
- * function; direct assignment by generated code bypasses reference-count
- * bookkeeping and violates the collector-independent pointer-assignment
- * contract.
+ * gc_scope_add_root() or a pointer field described by its allocation's type
+ * descriptor. source must be null or a pointer to a currently live managed
+ * payload returned by a typed allocation operation or written by the
+ * collector. Every assignment, replacement, and clearing of a managed pointer
+ * must use this function; direct assignment by generated code bypasses
+ * reference-count bookkeeping and violates the collector-independent
+ * pointer-assignment contract.
  *
  * Allocation and collection are safe points for the copying collector. Only
- * registered roots and fields are rewritten when an object moves. Generated
- * code must not keep an unregistered managed alias across either safe point;
- * it must reload the value from a registered slot or field afterward. If the
- * destination is a field, lowering must allocate first and form its address
- * only after reloading the host object; do not emit
- * gc_pointer_assign(&object->field, gc_malloc(size)).
+ * registered roots and described fields are rewritten when an object moves.
+ * Generated code must not keep an unregistered managed alias across either
+ * safe point; it must reload the value from a registered root or described
+ * field afterward. If the destination is a field, lowering must allocate first
+ * and form its address only after reloading the host object; do not emit
+ * gc_pointer_assign(&object->field, gc_alloc_object(type)).
  *
  * @param destination_slot Address of the destination pointer slot.
  * @param source Managed payload address or null.

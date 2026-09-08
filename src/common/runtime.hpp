@@ -17,7 +17,7 @@ struct FreeDeleter {
 template <typename T = std::byte> using MallocPtr = std::unique_ptr<T, FreeDeleter>;
 
 // Managed slots may have typed pointer storage. Byte-wise access preserves the
-// slot's declared type while honoring the ABI v1 representation invariant.
+// slot's declared type while honoring the ABI v2 representation invariant.
 inline void *load_pointer(const void *slot) noexcept {
     void *value;
     std::memcpy(&value, slot, sizeof(value));
@@ -46,8 +46,8 @@ template <typename T = std::byte> MallocPtr<T> malloc_bytes(std::size_t size) {
     fatal(message);
 }
 
-[[noreturn]] inline void invalid_pointer_table() noexcept {
-    fatal("Invalid pointer table");
+[[noreturn]] inline void invalid_type_descriptor() noexcept {
+    fatal("Invalid type descriptor");
 }
 
 inline void require_initialized(bool initialized) noexcept {

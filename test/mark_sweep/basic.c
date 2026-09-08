@@ -1,4 +1,5 @@
 #include "../test_layout.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stdio.h>
@@ -11,15 +12,15 @@ int main(void) {
     const size_t block_size = test_gc_block_size(alloc_size);
     const size_t heap_capacity = test_gc_heap_capacity();
 
-    void *ptr, *ptr2;
+    unsigned char *ptr, *ptr2;
     gc_scope_add_root(&ptr);
     gc_scope_add_root(&ptr2);
 
     TEST_CHECK(ptr == NULL);
     TEST_CHECK(ptr2 == NULL);
 
-    gc_pointer_assign(&ptr, gc_malloc(alloc_size));  // block A
-    gc_pointer_assign(&ptr2, gc_malloc(alloc_size)); // block B
+    gc_pointer_assign(&ptr, gc_alloc_array(test_gc_byte_type(), alloc_size));  // block A
+    gc_pointer_assign(&ptr2, gc_alloc_array(test_gc_byte_type(), alloc_size)); // block B
 
     gc_debug_memory_layout layout = test_gc_memory_layout();
     TEST_CHECK(layout.block_count == 3);
@@ -46,11 +47,11 @@ int main(void) {
     TEST_CHECK(test_gc_reclaimed_block_count() == 1);
     test_gc_dispose_memory_layout(&layout);
 
-    void *ptr3;
+    unsigned char *ptr3;
     gc_scope_add_root(&ptr3);
     TEST_CHECK(ptr3 == NULL);
 
-    gc_pointer_assign(&ptr3, gc_malloc(alloc_size)); // block C
+    gc_pointer_assign(&ptr3, gc_alloc_array(test_gc_byte_type(), alloc_size)); // block C
 
     layout = test_gc_memory_layout();
     TEST_CHECK(layout.block_count == 3);

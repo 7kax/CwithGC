@@ -1,6 +1,5 @@
 add_library(gc_common OBJECT
     common/memory_layout.cpp
-    common/pointer_table.cpp
 )
 
 target_include_directories(gc_common

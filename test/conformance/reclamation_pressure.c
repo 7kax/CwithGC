@@ -9,6 +9,12 @@ struct pressure_object {
     unsigned char bytes[128];
 };
 
+static const gc_type_descriptor pressure_object_type = {
+    sizeof(struct pressure_object),
+    0,
+    NULL,
+};
+
 int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
@@ -21,14 +27,14 @@ int main(void) {
     // collection, so the loop only completes when the current implementations
     // reclaim unreachable allocations.
     for (size_t iteration = 0; iteration < 64; iteration++) {
-        gc_pointer_assign(&slot, gc_malloc(sizeof(*slot)));
+        gc_pointer_assign(&slot, gc_alloc_object(&pressure_object_type));
         TEST_CHECK(slot != NULL);
         memset(slot->bytes, (int)(iteration & 0xff), sizeof(slot->bytes));
         gc_pointer_assign(&slot, NULL);
         gc_collect();
     }
 
-    gc_pointer_assign(&slot, gc_malloc(sizeof(*slot)));
+    gc_pointer_assign(&slot, gc_alloc_object(&pressure_object_type));
     TEST_CHECK(slot != NULL);
     memset(slot->bytes, 0xa5, sizeof(slot->bytes));
 

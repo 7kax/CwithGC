@@ -17,13 +17,10 @@ int main(int argc, char **argv) {
     if (argc != 2)
         return EXIT_FAILURE;
 
-    if (std::string_view(argv[1]) == "pointer-table") {
-        const std::size_t pointer_field_offsets[] = {0};
-        (void)gc_ptr_table_create(1, sizeof(void *), 1, pointer_field_offsets);
-    } else if (std::string_view(argv[1]) == "root") {
+    if (std::string_view(argv[1]) == "root") {
         gc_init();
         const gc_scope_token scope = gc_scope_begin();
-        void *root;
+        int *root;
         gc_scope_add_root(&root);
         gc_scope_end(scope);
         gc_cleanup();

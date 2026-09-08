@@ -1,4 +1,5 @@
 #include "../test_debug.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stdio.h>
@@ -8,11 +9,11 @@ int main(void) {
     gc_init();
     gc_scope_token scope = gc_scope_begin();
 
-    void *root;
+    unsigned char *root;
     gc_scope_add_root(&root);
 
     const size_t payload_size = test_gc_heap_capacity() - test_gc_metadata_size();
-    gc_pointer_assign(&root, gc_malloc(payload_size));
+    gc_pointer_assign(&root, gc_alloc_array(test_gc_byte_type(), payload_size));
     memset(root, 0x5a, payload_size);
     TEST_CHECK(test_gc_free_bytes() == 0);
 
@@ -31,7 +32,7 @@ int main(void) {
     TEST_CHECK(test_gc_reclaimed_block_count() == 1);
 
     // The rebuilt free-list must support another full-heap allocation.
-    gc_pointer_assign(&root, gc_malloc(payload_size));
+    gc_pointer_assign(&root, gc_alloc_array(test_gc_byte_type(), payload_size));
     TEST_CHECK(root != NULL);
     TEST_CHECK(test_gc_free_bytes() == 0);
 

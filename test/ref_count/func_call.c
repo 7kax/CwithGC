@@ -1,4 +1,5 @@
 #include "../test_debug.h"
+#include "../test_types.h"
 #include "gc.h"
 
 #include <stdio.h>
@@ -7,7 +8,7 @@ void allocate_temporary_objects(void) {
     const size_t alloc_size = 100;
     gc_scope_token scope = gc_scope_begin();
 
-    void *first_pointer, *second_pointer, *third_pointer;
+    unsigned char *first_pointer, *second_pointer, *third_pointer;
     gc_scope_add_root(&first_pointer);
     gc_scope_add_root(&second_pointer);
     gc_scope_add_root(&third_pointer);
@@ -16,9 +17,9 @@ void allocate_temporary_objects(void) {
     TEST_CHECK(second_pointer == NULL);
     TEST_CHECK(third_pointer == NULL);
 
-    gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block D
-    gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block E
-    gc_pointer_assign(&third_pointer, gc_malloc(alloc_size));  // block F
+    gc_pointer_assign(&first_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size));  // block D
+    gc_pointer_assign(&second_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size)); // block E
+    gc_pointer_assign(&third_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size));  // block F
 
     // Release all local variables before returning from the function.
     gc_scope_end(scope);
@@ -34,7 +35,7 @@ int main(void) {
     const size_t alloc_size = 100;
     const size_t heap_capacity = test_gc_heap_capacity();
 
-    void *first_pointer, *second_pointer, *third_pointer;
+    unsigned char *first_pointer, *second_pointer, *third_pointer;
     gc_scope_add_root(&first_pointer);
     gc_scope_add_root(&second_pointer);
     gc_scope_add_root(&third_pointer);
@@ -43,9 +44,9 @@ int main(void) {
     TEST_CHECK(second_pointer == NULL);
     TEST_CHECK(third_pointer == NULL);
 
-    gc_pointer_assign(&first_pointer, gc_malloc(alloc_size));  // block A
-    gc_pointer_assign(&second_pointer, gc_malloc(alloc_size)); // block B
-    gc_pointer_assign(&third_pointer, gc_malloc(alloc_size));  // block C
+    gc_pointer_assign(&first_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size));  // block A
+    gc_pointer_assign(&second_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size)); // block B
+    gc_pointer_assign(&third_pointer, gc_alloc_array(test_gc_byte_type(), alloc_size));  // block C
 
     TEST_CHECK(test_gc_reclaimed_block_count() == 0);
     TEST_CHECK(test_gc_root_count() == 3);
