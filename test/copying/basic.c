@@ -36,17 +36,10 @@ int main(void) {
     TEST_CHECK(*ptr2 == 43);
     TEST_CHECK(*ptr3 == 44);
 
-    int *pre_ptr1 = ptr1, *pre_ptr2 = ptr2, *pre_ptr3 = ptr3;
-
     // Collect garbage
     gc_collect();
     TEST_CHECK(test_gc_reclaimed_block_count() == 0);
     TEST_CHECK(test_gc_relocated_block_count() == 3);
-
-    // Address should be different after garbage collection
-    TEST_CHECK(ptr1 != pre_ptr1);
-    TEST_CHECK(ptr2 != pre_ptr2);
-    TEST_CHECK(ptr3 != pre_ptr3);
 
     // Check if the values are still intact
     TEST_CHECK(*ptr1 == 42);

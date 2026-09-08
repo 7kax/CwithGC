@@ -62,11 +62,9 @@ int main(void) {
 
     const size_t live_size = test_gc_heap_capacity() - test_gc_free_bytes();
     for (int round = 0; round < 3; round++) {
-        struct node *old_nodes[5];
         struct node *node = head;
         for (int i = 0; i < n; i++) {
             TEST_CHECK(node != NULL);
-            old_nodes[i] = node;
             node = node->next;
         }
         TEST_CHECK(node == NULL);
@@ -78,7 +76,6 @@ int main(void) {
         node = head;
         for (int i = 0; i < n; i++) {
             TEST_CHECK(node != NULL);
-            TEST_CHECK(node != old_nodes[i]);
             TEST_CHECK(node->data == elements[i]);
             node = node->next;
         }

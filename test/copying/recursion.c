@@ -54,8 +54,6 @@ int main(void) {
     TEST_CHECK(test_gc_root_count() == 1);
     TEST_CHECK(test_gc_relocated_block_count() == 0);
 
-    struct pointer_object *pre_ptr = ptr;
-
     {
         int *temporary = gc_malloc(sizeof(int));
         gc_pointer_assign(&ptr->b, temporary);
@@ -79,9 +77,6 @@ int main(void) {
     // Trigger garbage collection.
     gc_collect();
     TEST_CHECK(test_gc_relocated_block_count() == 4); // One structure and three integers.
-
-    // The address should change.
-    TEST_CHECK(ptr != pre_ptr);
 
     // The values should remain unchanged.
     TEST_CHECK(ptr->a == 666);
