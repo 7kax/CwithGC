@@ -5,6 +5,7 @@ in C++20 with reference-counting, copying, and mark-and-sweep collectors.
 
 See [the architecture document](docs/architecture.md) for the managed-pointer model, compiler
 responsibilities, and the distinction between planned and fundamentally unsupported C features.
+The precise generated-call contract is specified in [Compiler-Runtime ABI v1](docs/abi.md).
 
 ## Build and Test
 

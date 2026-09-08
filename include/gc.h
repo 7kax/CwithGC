@@ -12,7 +12,7 @@ extern "C" {
 #include <stdint.h>
 
 /*
- * Compiler/instrumentation ABI contract:
+ * Compiler/instrumentation ABI v1 contract:
  *
  * This is a low-level ABI for compiler-generated calls and compiler-inserted
  * instrumentation. It is not a general-purpose application allocation API.
@@ -46,18 +46,23 @@ typedef uint64_t gc_scope_token;
 /**
  * @brief Create immutable pointer metadata for instrumented objects.
  *
- * The pointer_field_offsets array is copied. Every offset must name a complete,
- * naturally aligned pointer field inside a struct of struct_size bytes. For an
- * array, struct_size must preserve pointer alignment between elements.
+ * The pointer_field_offsets array is copied. ABI v1 requires its entries to be
+ * strictly increasing and unique. Each offset must name a complete, naturally
+ * aligned pointer field inside the exact element type. The compiler emits each
+ * offset from offsetof(T, field), passes sizeof(T) as struct_size, and passes
+ * the exact number of contiguous elements as array_len. For an array,
+ * struct_size must preserve pointer alignment between elements.
  * array_len, struct_size and num_pointers must all be greater than zero.
  * Invalid input and allocation failure terminate the process according to the
- * C ABI failure contract.
+ * C ABI failure contract. The runtime can check shape and payload capacity but
+ * cannot infer the source type or prove that sizeof(T) and array_len are exact;
+ * those are compiler invariants.
  *
- * A table may be shared by any number of registered objects. Compiler-generated
- * metadata must remain alive until those objects can no longer be visited by
- * the collector. The simplest valid lifetime is to destroy tables after
- * gc_cleanup(). This function is independent of the collector lifecycle and
- * does not require gc_init().
+ * A table may be shared by any number of registered objects with the same exact
+ * object layout. Compiler-generated metadata must remain alive until those
+ * objects can no longer be visited by the collector. The simplest valid
+ * lifetime is to destroy tables after gc_cleanup(). This function is
+ * independent of the collector lifecycle and does not require gc_init().
  *
  * @param array_len Number of consecutive structs described by the table.
  * @param struct_size Size of one struct in bytes.
@@ -114,11 +119,14 @@ void gc_scope_end(gc_scope_token token) CWITHGC_NOEXCEPT;
 /**
  * @brief Allocate a zero-initialized payload for instrumented code.
  *
- * The returned address points to the payload, not collector metadata. The
- * payload is zero-initialized for the requested number of bytes. It is owned
- * by the collector and must not be passed to free(). The generated code must
- * protect the pointer with gc_scope_add_root() or store it in a registered
- * pointer field before another allocation or collection can occur.
+ * The returned address points to the payload, not collector metadata. For a
+ * pointer-bearing type, the generated request is exactly array_len times the
+ * type's sizeof, and the object is registered with its canonical table before
+ * a collection can observe it. The payload is zero-initialized for the
+ * requested number of bytes. It is owned by the collector and must not be
+ * passed to free(). The generated code must protect the pointer with
+ * gc_scope_add_root() or store it in a registered pointer field before another
+ * allocation or collection can occur.
  *
  * Requests that cannot be represented or do not fit in the collector heap
  * terminate the process according to the C ABI failure contract.
@@ -170,9 +178,10 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC
  * bookkeeping and violates the collector-independent pointer-assignment
  * contract.
  *
- * For the copying collector, only registered roots and fields are rewritten
- * when an object moves. Unregistered aliases can therefore become stale after
- * gc_collect().
+ * Allocation and collection are safe points for the copying collector. Only
+ * registered roots and fields are rewritten when an object moves. Generated
+ * code must not keep an unregistered managed alias across either safe point;
+ * it must reload the value from a registered slot or field afterward.
  *
  * @param destination_slot Address of the destination pointer slot.
  * @param source Managed payload address or null.

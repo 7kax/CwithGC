@@ -7,6 +7,10 @@ compiler-generated instrumentation and the selected GC runtime; it is not a manu
 application allocation API. `include/gc_debug.h` is a separate, stable inspection interface for
 tests and diagnostic tools.
 
+The complete source-level lowering contract is specified in [Compiler-Runtime ABI v1](abi.md).
+This document records the architecture and resulting feature-support policy; the ABI document
+records the call ordering and compiler obligations that generated code must satisfy.
+
 The compiler owns the lowering rules and metadata described by `gc.h`. Generated code performs
 runtime startup and teardown, root-scope management, allocation, object-layout registration,
 managed-pointer assignment, and collection calls. Exactly one collector implementation is linked
@@ -20,8 +24,9 @@ must not cross either C ABI.
 - Every managed pointer points to the start of an object whose concrete type exactly matches the
   pointer's static pointee type. Managed pointers cannot erase or reinterpret the object layout
   through incompatible casts or type punning.
-- Pointer tables contain canonical, unique field offsets and the correct array length for the
-  allocation. This is a compiler invariant rather than an application-input validation boundary.
+- Pointer tables contain canonical, strictly increasing and unique field offsets and the correct
+  array length for the allocation. This is a compiler invariant rather than an application-input
+  validation boundary.
 - Every managed-pointer store is visible to instrumentation. Generated code registers roots and
   object layouts before a collection can observe them.
 - A managed allocation may move at any allocation or collection safe point. Only exact object-start
