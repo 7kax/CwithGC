@@ -10,7 +10,7 @@
 namespace gc_runtime {
 
 struct RootEntry {
-    void **slot;
+    void *slot;
 };
 
 struct ScopeBoundary {
@@ -32,9 +32,8 @@ class RootSet {
         if (scopes_.empty())
             gc_runtime::fatal("gc_scope_add_root requires an active GC scope");
 
-        auto **slot = static_cast<void **>(root_slot);
-        entries_.push_back({slot});
-        *slot = nullptr;
+        entries_.push_back({root_slot});
+        store_pointer(root_slot, nullptr);
     }
 
     template <typename Visitor> void for_each(Visitor &&visitor) const noexcept {
@@ -51,9 +50,10 @@ class RootSet {
     template <typename Releaser> void end_scope(ScopeToken token, Releaser &&releaser) noexcept {
         const std::size_t start = scope_start(token);
         for (std::size_t i = entries_.size(); i > start; --i) {
-            void **slot = entries_[i - 1].slot;
-            if (*slot != nullptr)
-                releaser(*slot);
+            void *slot = entries_[i - 1].slot;
+            void *pointer = load_pointer(slot);
+            if (pointer != nullptr)
+                releaser(pointer);
         }
         entries_.resize(start);
         scopes_.pop_back();

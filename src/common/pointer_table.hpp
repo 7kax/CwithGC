@@ -24,7 +24,7 @@ void for_each_field(const gc_ptr_table &table, void *payload, Visitor &&visitor)
     auto *current = static_cast<std::byte *>(payload);
     for (std::size_t i = 0; i < table.array_len; ++i) {
         for (std::size_t field_offset : table.field_offsets)
-            visitor(reinterpret_cast<void **>(current + field_offset));
+            visitor(static_cast<void *>(current + field_offset));
         current += table.struct_size;
     }
 }

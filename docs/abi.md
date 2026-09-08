@@ -17,7 +17,8 @@ types, templates, containers, and exceptions never cross the C boundary.
 
 ## Supported v1 lowering
 
-The v1 contract covers generated code for complete, statically known C object types:
+The v1 contract covers generated code for complete, statically known C object types whose alignment
+does not exceed `_Alignof(max_align_t)`:
 
 - pointer-free scalar allocations;
 - structs and fixed-size arrays of structs with direct managed-pointer fields;
@@ -43,7 +44,16 @@ The offset sequence is strictly increasing, naturally aligned for a pointer, in 
 complete field, and therefore unique. The sequence is deterministic for a given source type. The
 runtime rejects malformed shape and capacity values, but it cannot infer `T` from an opaque payload
 or prove that a caller supplied the source-level `sizeof` and element count. Those exact-type and
-element-count properties are compiler invariants.
+element-count properties are compiler invariants. Over-aligned managed types (for example, a type
+requiring `_Alignas` beyond `max_align_t`) are outside v1 and must be rejected by the compiler.
+
+The generic slot ABI carries pointer values as opaque object representations. A v1 target must
+provide the same size and representation for every managed object-pointer type and `void *`; the
+compiler must reject a target/type combination that does not satisfy this requirement. The runtime
+uses byte-wise loads and stores for slots, so it does not alias a typed pointer object as `void **`.
+This is a target qualification rather than a runtime assertion because C11 has no portable predicate
+for comparing pointer representations. Function pointers are not managed object pointers and are
+outside this requirement.
 
 The compiler creates the descriptor before registering an object and keeps it alive until
 `gc_cleanup()` has made every registered object unreachable. A table must not be destroyed while
@@ -77,14 +87,21 @@ registered object fields are discoverable and rewritten. Generated code must not
 unregistered managed alias across a safe point; it must reload the value from its registered slot
 or field afterward.
 
+When a destination slot is inside a managed object, lowering must finish every allocation or other
+safe-point expression before forming that slot address. In particular, it must allocate into a
+temporary first, then reload the host object from its registered slot or field and form the field
+address for `gc_pointer_assign()`. An expression such as
+`gc_pointer_assign(&object->field, gc_malloc(size))` can leave the destination address in from-space
+when a copying collector moves `object` during `gc_malloc()` and is not valid v1 lowering.
+
 Every managed-pointer initialization, replacement, and clear operation is emitted as
 `gc_pointer_assign(destination, source)`. The destination must be a registered root slot or a field
 described by its object's table. The source must be null or a currently live managed payload. A
 direct C assignment to a managed pointer bypasses collector bookkeeping and is not a v1 lowering.
 
-The compiler emits object registration before a collection can traverse the object. Allocated
-payloads are zero-initialized by the ABI, so unassigned pointer fields begin as null; subsequent
-field writes still use `gc_pointer_assign()`.
+The compiler emits object registration before a collection can traverse the object. `gc_malloc()`
+zero-initializes the payload bytes, and registration writes the null representation to every
+described pointer field; subsequent field writes still use `gc_pointer_assign()`.
 
 ## Failure and collector-selection contract
 

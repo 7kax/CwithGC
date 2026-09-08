@@ -85,7 +85,7 @@ int main(void) {
         TEST_CHECK(node == NULL);
     }
 
-    gc_pointer_assign((void **)&head, NULL);
+    gc_pointer_assign(&head, NULL);
     TEST_CHECK(cur == NULL);
     TEST_CHECK(new_node == NULL);
 

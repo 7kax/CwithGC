@@ -57,9 +57,18 @@ int main(void) {
     TEST_CHECK(test_gc_reclaimed_block_count() == 0);
 
     // Allocate and initialize nested references.
-    gc_pointer_assign(&ptr->b, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr->c, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr->d, gc_malloc(sizeof(int)));
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->b, temporary);
+    }
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->c, temporary);
+    }
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->d, temporary);
+    }
     TEST_CHECK(test_gc_reclaimed_block_count() == 0);
     TEST_CHECK(test_gc_root_count() == 1);
 

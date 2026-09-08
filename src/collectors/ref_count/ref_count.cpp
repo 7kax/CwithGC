@@ -82,13 +82,15 @@ class RefCountState {
             gc_runtime::invalid_pointer_table();
 
         header->pointer_table = pointer_table;
+        gc_pointer_table::for_each_field(*pointer_table, object, [](void *slot) noexcept {
+            gc_runtime::store_pointer(slot, nullptr);
+        });
     }
 
     void assign_pointer(void *destination_slot, void *source) noexcept {
         require_initialized();
 
-        auto **destination = static_cast<void **>(destination_slot);
-        void *old = *destination;
+        void *old = gc_runtime::load_pointer(destination_slot);
         if (old == source)
             return;
 
@@ -98,7 +100,7 @@ class RefCountState {
             increment_ref_count(source);
 
         // Store before releasing old because destination may be a field inside old.
-        *destination = source;
+        gc_runtime::store_pointer(destination_slot, source);
         if (old != nullptr)
             decrement_ref_count(old);
     }
@@ -163,9 +165,10 @@ class RefCountState {
 
         if (header->pointer_table != nullptr) {
             gc_pointer_table::for_each_field(*header->pointer_table, ptr,
-                                             [this](void **child_ptr) noexcept {
-                                                 if (*child_ptr != nullptr)
-                                                     decrement_ref_count(*child_ptr);
+                                             [this](void *child_slot) noexcept {
+                                                 void *child = gc_runtime::load_pointer(child_slot);
+                                                 if (child != nullptr)
+                                                     decrement_ref_count(child);
                                              });
         }
 

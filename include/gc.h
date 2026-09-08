@@ -18,6 +18,10 @@ extern "C" {
  * instrumentation. It is not a general-purpose application allocation API.
  * A language runtime or instrumentation pass lowers managed allocations,
  * pointer updates, and local-root lifetimes to these operations.
+ * ABI v1 requires every managed object-pointer type used in a slot to have the
+ * same size and representation as void *. Function pointers are not managed
+ * object pointers. The compiler must reject targets that do not provide this
+ * representation invariant.
  *
  * - The process has one collector instance. It is single-threaded and is not
  *   thread-safe; generated code and runtime integration must serialize every
@@ -123,10 +127,13 @@ void gc_scope_end(gc_scope_token token) CWITHGC_NOEXCEPT;
  * pointer-bearing type, the generated request is exactly array_len times the
  * type's sizeof, and the object is registered with its canonical table before
  * a collection can observe it. The payload is zero-initialized for the
- * requested number of bytes. It is owned by the collector and must not be
- * passed to free(). The generated code must protect the pointer with
- * gc_scope_add_root() or store it in a registered pointer field before another
- * allocation or collection can occur.
+ * requested number of bytes and is aligned for _Alignof(max_align_t); over-
+ * aligned managed types are outside ABI v1 and must be rejected by the
+ * compiler. Registration writes the null representation to described pointer
+ * fields. The payload is owned by the collector and must not be passed to
+ * free(). The generated code must protect the pointer with gc_scope_add_root()
+ * or store it in a registered pointer field before another allocation or
+ * collection can occur.
  *
  * Requests that cannot be represented or do not fit in the collector heap
  * terminate the process according to the C ABI failure contract.
@@ -142,7 +149,8 @@ void *gc_malloc(size_t size) CWITHGC_NOEXCEPT;
  * root_slot must point to writable, naturally aligned pointer storage whose
  * lifetime extends through gc_scope_end(). The slot is set to null immediately,
  * so instrumentation must register it before assigning a managed pointer. The
- * runtime updates registered slots when a moving collector relocates objects.
+ * runtime treats the slot representation as opaque and updates it when a moving
+ * collector relocates objects.
  * An active scope is required. The slot itself does not become a managed
  * allocation and must not be registered more than once for the same scope.
  *
@@ -181,7 +189,10 @@ void gc_register_object(void *object, const gc_ptr_table *pointer_table) CWITHGC
  * Allocation and collection are safe points for the copying collector. Only
  * registered roots and fields are rewritten when an object moves. Generated
  * code must not keep an unregistered managed alias across either safe point;
- * it must reload the value from a registered slot or field afterward.
+ * it must reload the value from a registered slot or field afterward. If the
+ * destination is a field, lowering must allocate first and form its address
+ * only after reloading the host object; do not emit
+ * gc_pointer_assign(&object->field, gc_malloc(size)).
  *
  * @param destination_slot Address of the destination pointer slot.
  * @param source Managed payload address or null.

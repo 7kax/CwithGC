@@ -56,9 +56,18 @@ int main(void) {
 
     struct pointer_object *pre_ptr = ptr;
 
-    gc_pointer_assign(&ptr->b, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr->c, gc_malloc(sizeof(int)));
-    gc_pointer_assign(&ptr->d, gc_malloc(sizeof(int)));
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->b, temporary);
+    }
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->c, temporary);
+    }
+    {
+        int *temporary = gc_malloc(sizeof(int));
+        gc_pointer_assign(&ptr->d, temporary);
+    }
     TEST_CHECK(test_gc_relocated_block_count() == 0);
     TEST_CHECK(test_gc_root_count() == 1);
 
@@ -81,7 +90,7 @@ int main(void) {
     TEST_CHECK(*ptr->d == 44);
 
     // Clear the root object and collect.
-    gc_pointer_assign((void **)&ptr, NULL);
+    gc_pointer_assign(&ptr, NULL);
     gc_collect();
     TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 

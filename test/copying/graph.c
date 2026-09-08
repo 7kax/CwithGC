@@ -33,27 +33,27 @@ int main(void) {
     gc_scope_token scope = gc_scope_begin();
 
     struct node *root, *left, *right, *leaf;
-    gc_scope_add_root((void **)&root);
-    gc_scope_add_root((void **)&left);
-    gc_scope_add_root((void **)&right);
-    gc_scope_add_root((void **)&leaf);
+    gc_scope_add_root(&root);
+    gc_scope_add_root(&left);
+    gc_scope_add_root(&right);
+    gc_scope_add_root(&leaf);
 
-    gc_pointer_assign((void **)&root, make_node(1, pointer_table));
-    gc_pointer_assign((void **)&left, make_node(2, pointer_table));
-    gc_pointer_assign((void **)&right, make_node(3, pointer_table));
-    gc_pointer_assign((void **)&leaf, make_node(4, pointer_table));
+    gc_pointer_assign(&root, make_node(1, pointer_table));
+    gc_pointer_assign(&left, make_node(2, pointer_table));
+    gc_pointer_assign(&right, make_node(3, pointer_table));
+    gc_pointer_assign(&leaf, make_node(4, pointer_table));
 
-    gc_pointer_assign((void **)&root->left, left);
-    gc_pointer_assign((void **)&root->right, right);
-    gc_pointer_assign((void **)&left->left, leaf);
-    gc_pointer_assign((void **)&right->right, leaf);
-    gc_pointer_assign((void **)&leaf->left, root);
+    gc_pointer_assign(&root->left, left);
+    gc_pointer_assign(&root->right, right);
+    gc_pointer_assign(&left->left, leaf);
+    gc_pointer_assign(&right->right, leaf);
+    gc_pointer_assign(&leaf->left, root);
 
     // Keep the graph alive solely through root. The leaf is shared by two
     // parents and points back to root, exercising both aliasing and a cycle.
-    gc_pointer_assign((void **)&left, NULL);
-    gc_pointer_assign((void **)&right, NULL);
-    gc_pointer_assign((void **)&leaf, NULL);
+    gc_pointer_assign(&left, NULL);
+    gc_pointer_assign(&right, NULL);
+    gc_pointer_assign(&leaf, NULL);
 
     const size_t live_size = test_gc_heap_capacity() - test_gc_free_bytes();
     for (size_t round = 0; round < 4; round++) {
@@ -79,7 +79,7 @@ int main(void) {
         TEST_CHECK(root->left->left->left == root);
     }
 
-    gc_pointer_assign((void **)&root, NULL);
+    gc_pointer_assign(&root, NULL);
     gc_collect();
     TEST_CHECK(test_gc_free_bytes() == test_gc_heap_capacity());
 

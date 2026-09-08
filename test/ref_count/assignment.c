@@ -41,16 +41,19 @@ static void test_self_assignment(void) {
 static void test_child_promotion(gc_ptr_table *table) {
     gc_scope_token scope = gc_scope_begin();
     void *root;
+    int *temporary;
     gc_scope_add_root(&root);
+    gc_scope_add_root(&temporary);
 
-    struct holder *parent = gc_malloc(sizeof(struct holder));
-    gc_register_object(parent, table);
-    gc_pointer_assign(&root, parent);
-    gc_pointer_assign(&parent->child, gc_malloc(sizeof(int)));
-    *parent->child = 43;
+    gc_pointer_assign(&root, gc_malloc(sizeof(struct holder)));
+    gc_register_object(root, table);
+    gc_pointer_assign(&temporary, gc_malloc(sizeof(int)));
+    *temporary = 43;
+    gc_pointer_assign(&((struct holder *)root)->child, temporary);
+    gc_pointer_assign(&temporary, NULL);
 
     const size_t reclaimed_count = test_gc_reclaimed_block_count();
-    gc_pointer_assign(&root, parent->child);
+    gc_pointer_assign(&root, ((struct holder *)root)->child);
 
     TEST_CHECK(*(int *)root == 43);
     TEST_CHECK(test_gc_reclaimed_block_count() == reclaimed_count + 1);
@@ -63,14 +66,18 @@ static void test_child_promotion(gc_ptr_table *table) {
 static void test_field_replacement(gc_ptr_table *table) {
     gc_scope_token scope = gc_scope_begin();
     struct holder *parent;
+    int *temporary;
     int *replacement;
     gc_scope_add_root(&parent);
+    gc_scope_add_root(&temporary);
     gc_scope_add_root(&replacement);
 
     gc_pointer_assign(&parent, gc_malloc(sizeof(struct holder)));
     gc_register_object(parent, table);
-    gc_pointer_assign(&parent->child, gc_malloc(sizeof(int)));
-    *parent->child = 44;
+    gc_pointer_assign(&temporary, gc_malloc(sizeof(int)));
+    *temporary = 44;
+    gc_pointer_assign(&parent->child, temporary);
+    gc_pointer_assign(&temporary, NULL);
 
     gc_pointer_assign(&replacement, gc_malloc(sizeof(int)));
     *replacement = 45;

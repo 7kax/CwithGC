@@ -32,6 +32,10 @@ _Static_assert(offsetof(struct padded_pointer_element, first) % _Alignof(void *)
                "first pointer field must be naturally aligned");
 _Static_assert(offsetof(struct padded_pointer_element, second) % _Alignof(void *) == 0,
                "second pointer field must be naturally aligned");
+_Static_assert(sizeof(struct pointer_table_leaf *) == sizeof(void *),
+               "managed object pointers must match the ABI representation size");
+_Static_assert(_Alignof(struct pointer_table_leaf *) == _Alignof(void *),
+               "managed object pointers must match the ABI alignment");
 _Static_assert(POINTER_TABLE_ARRAY_LEN * sizeof(struct padded_pointer_element) ==
                    sizeof(struct padded_pointer_element[POINTER_TABLE_ARRAY_LEN]),
                "array payload size must match element count and sizeof");

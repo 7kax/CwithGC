@@ -139,11 +139,14 @@ class CopyingState {
             gc_runtime::invalid_pointer_table();
 
         header->pointer_table = pointer_table;
+        gc_pointer_table::for_each_field(*pointer_table, object, [](void *slot) noexcept {
+            gc_runtime::store_pointer(slot, nullptr);
+        });
     }
 
     void assign_pointer(void *destination_slot, void *source) const noexcept {
         require_initialized();
-        *static_cast<void **>(destination_slot) = source;
+        gc_runtime::store_pointer(destination_slot, source);
     }
 
     void collect() noexcept {
@@ -153,9 +156,10 @@ class CopyingState {
         to_space_.rewind();
         std::byte *scan = to_space_.begin();
 
-        roots_.for_each([this](void **root_slot) noexcept {
-            if (*root_slot != nullptr)
-                *root_slot = evacuate(*root_slot);
+        roots_.for_each([this](void *root_slot) noexcept {
+            void *root = gc_runtime::load_pointer(root_slot);
+            if (root != nullptr)
+                gc_runtime::store_pointer(root_slot, evacuate(root));
         });
 
         // Objects copied while scanning are appended to to-space, so the
@@ -248,11 +252,12 @@ class CopyingState {
         if (pointer_table == nullptr)
             return;
 
-        gc_pointer_table::for_each_field(*pointer_table, gc_layout::payload(header),
-                                         [this](void **child_slot) noexcept {
-                                             if (*child_slot != nullptr)
-                                                 *child_slot = evacuate(*child_slot);
-                                         });
+        gc_pointer_table::for_each_field(
+            *pointer_table, gc_layout::payload(header), [this](void *child_slot) noexcept {
+                void *child = gc_runtime::load_pointer(child_slot);
+                if (child != nullptr)
+                    gc_runtime::store_pointer(child_slot, evacuate(child));
+            });
     }
 
     bool initialized_ = false;

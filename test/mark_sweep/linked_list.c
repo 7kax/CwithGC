@@ -60,7 +60,7 @@ int main(void) {
 
     for (size_t i = 0; i < n; i++) {
         TEST_CHECK(head->data == elements[i]);
-        gc_pointer_assign((void **)&head, head->next);
+        gc_pointer_assign(&head, head->next);
     }
 
     TEST_CHECK(head == NULL);

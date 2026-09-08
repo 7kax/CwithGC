@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <new>
 
@@ -14,6 +15,18 @@ struct FreeDeleter {
 };
 
 template <typename T = std::byte> using MallocPtr = std::unique_ptr<T, FreeDeleter>;
+
+// Managed slots may have typed pointer storage. Byte-wise access preserves the
+// slot's declared type while honoring the ABI v1 representation invariant.
+inline void *load_pointer(const void *slot) noexcept {
+    void *value;
+    std::memcpy(&value, slot, sizeof(value));
+    return value;
+}
+
+inline void store_pointer(void *slot, void *value) noexcept {
+    std::memcpy(slot, &value, sizeof(value));
+}
 
 template <typename T = std::byte> MallocPtr<T> malloc_bytes(std::size_t size) {
     void *memory = std::malloc(size);

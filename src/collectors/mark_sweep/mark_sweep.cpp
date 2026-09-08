@@ -199,11 +199,14 @@ class MarkSweepState {
             gc_runtime::invalid_pointer_table();
 
         header->pointer_table = pointer_table;
+        gc_pointer_table::for_each_field(*pointer_table, object, [](void *slot) noexcept {
+            gc_runtime::store_pointer(slot, nullptr);
+        });
     }
 
     void assign_pointer(void *destination_slot, void *source) const noexcept {
         require_initialized();
-        *static_cast<void **>(destination_slot) = source;
+        gc_runtime::store_pointer(destination_slot, source);
     }
 
     void collect() noexcept {
@@ -277,16 +280,18 @@ class MarkSweepState {
             return;
 
         gc_pointer_table::for_each_field(*header->pointer_table, ptr,
-                                         [this](void **child_ptr) noexcept {
-                                             if (*child_ptr != nullptr)
-                                                 mark(*child_ptr);
+                                         [this](void *child_slot) noexcept {
+                                             void *child = gc_runtime::load_pointer(child_slot);
+                                             if (child != nullptr)
+                                                 mark(child);
                                          });
     }
 
     void mark_phase() noexcept {
-        roots_.for_each([this](void **root_slot) noexcept {
-            if (*root_slot != nullptr)
-                mark(*root_slot);
+        roots_.for_each([this](void *root_slot) noexcept {
+            void *root = gc_runtime::load_pointer(root_slot);
+            if (root != nullptr)
+                mark(root);
         });
     }
 

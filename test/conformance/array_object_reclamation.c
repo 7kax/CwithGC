@@ -35,7 +35,9 @@ void allocate_unrooted_tree_array(void) {
 
     gc_scope_token scope = gc_scope_begin();
     struct tree_node *root;
+    struct tree_node *temporary;
     gc_scope_add_root(&root);
+    gc_scope_add_root(&temporary);
 
     gc_pointer_assign(&root, gc_malloc(sizeof(struct tree_node) * 10));
     // root points to an array of structures.
@@ -44,16 +46,25 @@ void allocate_unrooted_tree_array(void) {
 
     for (int i = 0; i < 10; i++) {
         root[i].data = i;
-        gc_pointer_assign(&root[i].left, gc_malloc(sizeof(struct tree_node)));
+        gc_pointer_assign(&temporary, gc_malloc(sizeof(struct tree_node)));
         // Each left field points to a separately allocated structure.
-        gc_register_object(root[i].left, tree_pointer_table);
-        TEST_CHECK(root[i].left != NULL);
-        root[i].left->data = i + 1;
-        gc_pointer_assign(&root[i].right, gc_malloc(sizeof(struct tree_node)));
+        gc_register_object(temporary, tree_pointer_table);
+        TEST_CHECK(temporary != NULL);
+        temporary->data = i + 1;
+        // Force a moving safe point before forming the destination field address.
+        gc_collect();
+        gc_pointer_assign(&root[i].left, temporary);
+        gc_pointer_assign(&temporary, NULL);
+
+        gc_pointer_assign(&temporary, gc_malloc(sizeof(struct tree_node)));
         // Each right field points to a separately allocated structure.
-        gc_register_object(root[i].right, tree_pointer_table);
-        TEST_CHECK(root[i].right != NULL);
-        root[i].right->data = i + 2;
+        gc_register_object(temporary, tree_pointer_table);
+        TEST_CHECK(temporary != NULL);
+        temporary->data = i + 2;
+        // Force a moving safe point before forming the destination field address.
+        gc_collect();
+        gc_pointer_assign(&root[i].right, temporary);
+        gc_pointer_assign(&temporary, NULL);
     }
 
     gc_scope_end(scope);

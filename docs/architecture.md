@@ -65,3 +65,5 @@ diagnose them when they involve managed data:
 | General unions whose active alternatives have different managed-pointer layouts | A static pointer table does not provide reliable active-member information |
 | Pointer-field writes or bytewise copies hidden from instrumentation | Reference counting misses ownership changes and moving collectors cannot update hidden slots |
 | External code retaining raw managed addresses across a safe point | The collector cannot discover or rewrite aliases outside registered storage |
+| Managed object-pointer types with a representation different from `void *` | The untyped v1 slot ABI cannot perform a type-aware conversion; a future typed-slot ABI is required |
+| Over-aligned managed types requiring more than `_Alignof(max_align_t)` | The fixed heap layout provides fundamental alignment only; a future aligned-allocation ABI is required |

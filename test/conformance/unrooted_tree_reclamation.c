@@ -23,21 +23,32 @@ void allocate_unrooted_tree(void) {
 
     gc_scope_token scope = gc_scope_begin();
     struct tree_node *root;
+    struct tree_node *temporary;
     gc_scope_add_root(&root);
+    gc_scope_add_root(&temporary);
 
     gc_pointer_assign(&root, gc_malloc(sizeof(struct tree_node)));
     gc_register_object(root, tree_pointer_table);
     TEST_CHECK(root != NULL);
 
     root->data = 1;
-    gc_pointer_assign(&root->left, gc_malloc(sizeof(struct tree_node)));
-    gc_register_object(root->left, tree_pointer_table);
-    TEST_CHECK(root->left != NULL);
-    root->left->data = 2;
-    gc_pointer_assign(&root->right, gc_malloc(sizeof(struct tree_node)));
-    gc_register_object(root->right, tree_pointer_table);
-    TEST_CHECK(root->right != NULL);
-    root->right->data = 3;
+    gc_pointer_assign(&temporary, gc_malloc(sizeof(struct tree_node)));
+    gc_register_object(temporary, tree_pointer_table);
+    TEST_CHECK(temporary != NULL);
+    temporary->data = 2;
+    // Force a moving safe point before forming the destination field address.
+    gc_collect();
+    gc_pointer_assign(&root->left, temporary);
+    gc_pointer_assign(&temporary, NULL);
+
+    gc_pointer_assign(&temporary, gc_malloc(sizeof(struct tree_node)));
+    gc_register_object(temporary, tree_pointer_table);
+    TEST_CHECK(temporary != NULL);
+    temporary->data = 3;
+    // Force a moving safe point before forming the destination field address.
+    gc_collect();
+    gc_pointer_assign(&root->right, temporary);
+    gc_pointer_assign(&temporary, NULL);
 
     // The scope ends without retaining a root for any of the three allocations.
 
